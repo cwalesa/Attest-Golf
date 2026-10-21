@@ -2077,7 +2077,7 @@ function splitBar(parts) {
 }
 
 // js/app.js
-var VERSION = "2.4.0";
+var VERSION = "2.4.1";
 var params2 = new URLSearchParams(location.search);
 var DEMO = params2.get("demo") === "1";
 var data;
@@ -2178,7 +2178,7 @@ var hcpCache = null;
 var hcpKey = "";
 function hcp() {
   const k = data.rounds.map((r) => r.id + r.updatedAt).join();
-  if (k !== hcpKey) {
+  if (hcpCache === null || k !== hcpKey) {
     hcpCache = handicapHistory(data.rounds);
     hcpKey = k;
   }
