@@ -3,7 +3,7 @@ var STORAGE_KEY = "fairway-iphone-v2";
 var LEGACY_KEY = "fairway-golf-v1";
 var SAFETY_KEY = "attest-pre-migration-copy";
 var SCHEMA_VERSION = 3;
-var FAIRWAY = ["H", "L", "R", "NA"];
+var FAIRWAY = ["H", "L", "R", "S", "LG", "NA"];
 var ZONES = ["A", "B", "C", "D", "E"];
 var ZONE_LABEL = { A: "under 3 ft", B: "3\u20136 ft", C: "6\u201315 ft", D: "15\u201330 ft", E: "30 ft +" };
 var isBlank = (v) => v === "" || v === null || v === void 0 || typeof v === "number" && !Number.isFinite(v);
@@ -292,10 +292,12 @@ function summarize(rounds) {
   }
   const fronts = rounds.map((r) => nineTotal(r, 0)).filter((v) => v !== null);
   const backs = rounds.filter((r) => r.count === 18).map((r) => nineTotal(r, 9)).filter((v) => v !== null);
-  const fwElig = recs.filter((x) => x.h.par >= 4 && ["H", "L", "R"].includes(x.h.fairway));
+  const fwElig = recs.filter((x) => x.h.par >= 4 && ["H", "L", "R", "S", "LG"].includes(x.h.fairway));
   const fwHit = fwElig.filter((x) => x.h.fairway === "H").length;
   const fwL = fwElig.filter((x) => x.h.fairway === "L").length;
   const fwR = fwElig.filter((x) => x.h.fairway === "R").length;
+  const fwS = fwElig.filter((x) => x.h.fairway === "S").length;
+  const fwLG = fwElig.filter((x) => x.h.fairway === "LG").length;
   const girKnown = recs.filter((x) => x.gir.value);
   const girHit = girKnown.filter((x) => x.gir.value === "Y");
   const girAmbiguous = recs.filter((x) => x.gir.flag === "holed-out" || x.gir.flag === "approach-conflict");
@@ -359,7 +361,7 @@ function summarize(rounds) {
       doublesPlus: doublesPlus.length,
       doublesPer18: withPar.length ? doublesPlus.length / withPar.length * 18 : null
     },
-    fairways: { n: fwElig.length, hit: fwHit, left: fwL, right: fwR, pct: rate(fwHit, fwElig.length), misses: fwL + fwR },
+    fairways: { n: fwElig.length, hit: fwHit, left: fwL, right: fwR, short: fwS, long: fwLG, pct: rate(fwHit, fwElig.length), misses: fwL + fwR + fwS + fwLG },
     gir: { n: girKnown.length, hit: girHit.length, pct: rate(girHit.length, girKnown.length), ambiguous: girAmbiguous.length, overrides: recs.filter((x) => x.gir.source === "override").length, per18: girKnown.length ? girHit.length / girKnown.length * 18 : null },
     putting: {
       n: putt.length,
@@ -418,7 +420,7 @@ function holeReasons(x) {
   const h = x.h, out = [];
   if (h.penalties > 0) out.push(`${h.penalties} penalty stroke${h.penalties > 1 ? "s" : ""}`);
   if (h.putts >= 3) out.push(`${h.putts} putts${h.puttZone ? ` from zone ${h.puttZone}` : ""}`);
-  if (h.par >= 4 && (h.fairway === "L" || h.fairway === "R")) out.push(`missed fairway ${h.fairway === "L" ? "left" : "right"}`);
+  if (h.par >= 4 && ["L","R","S","LG"].includes(h.fairway)) out.push(`missed fairway ${{L:"left",R:"right",S:"short",LG:"long"}[h.fairway]}`);
   if (x.gir.value === "N" && has(h.putts) && h.score - h.putts - h.par + 2 >= 2) out.push(`reached the green ${h.score - h.putts - (h.par - 2)} shots after regulation`);
   if (["Fat", "Thin"].includes(h.strike)) out.push(`${h.strike.toLowerCase()} contact`);
   if (h.shortMiss === true) out.push("missed a short putt");
@@ -524,7 +526,7 @@ function findIssues(rounds) {
   const bu = unexplainedBlowups(recs);
   const buPer18 = s.scoring.parHoles ? bu.total / s.scoring.parHoles * 18 : null;
   if (s.scoring.parHoles >= 9 && buPer18 >= 1 && bu.holes.length >= 2) {
-    const fwMiss = bu.holes.filter((x) => x.h.par >= 4 && ["L", "R"].includes(x.h.fairway)).length;
+    const fwMiss = bu.holes.filter((x) => x.h.par >= 4 && ["L", "R", "S", "LG"].includes(x.h.fairway)).length;
     const lateGreen = bu.holes.filter((x) => x.h.putts !== "" && x.h.score - x.h.putts - (x.h.par - 2) >= 2).length;
     let cause = "";
     if (lateGreen >= bu.holes.length / 2) cause = ` On ${lateGreen} of them you reached the green two or more shots late, so the damage happened before the green.`;
@@ -560,15 +562,15 @@ function findIssues(rounds) {
     key: `driving-${fb.side}`,
     focus: `driving-${fb.side}`,
     title: `Tee shots miss ${fb.side}`,
-    evidence: `${fb.count} of your ${fb.of} missed fairways went ${fb.side} (${pc(fb.count / fb.of)}).`,
+    evidence: `${fb.count} of your ${fb.of} left/right fairway misses went ${fb.side} (${pc(fb.count / fb.of)}).`,
     advice: `Practise starting the ball on your intended line and choose targets that give a ${fb.side} miss more room. This is a pattern in results, not a diagnosis of your swing.`
   });
   if (s.fairways.n >= 14 && s.fairways.pct !== null && s.fairways.pct < 0.4 && !fb) patterns.push({
     key: "driving",
     focus: "driving",
     title: "Fairways are hard to come by",
-    evidence: `${s.fairways.hit} of ${s.fairways.n} fairways hit (${pc(s.fairways.pct)}), misses split ${s.fairways.left} left / ${s.fairways.right} right.`,
-    advice: "Misses go both ways, so practise a single reliable tee shot and a narrower target corridor."
+    evidence: `${s.fairways.hit} of ${s.fairways.n} fairways hit (${pc(s.fairways.pct)}), misses: ${s.fairways.left} left / ${s.fairways.right} right / ${s.fairways.short} short / ${s.fairways.long} long.`,
+    advice: s.fairways.short + s.fairways.long > s.fairways.left + s.fairways.right ? "Check the distance to the fairway landing area. Choose a tee club that reaches it without running through it." : "Practise a reliable tee shot and a narrower target corridor."
   });
   if (s.detailed.approachN >= 10) {
     const a = s.detailed.approach;
@@ -1034,6 +1036,15 @@ var DRILLS = [
     why: "A quick putting test that mixes speed and holing out."
   }
 ];
+
+DRILLS.push(
+  {id:"approach-two-clubs",name:"Two-club distance check",where:"R",focus:["approach","approach-short","approach-long","approach-dir"],kind:"skill",minutes:8,setup:"Two adjacent irons and one known safe target distance.",steps:"Alternate clubs for eight shots. Record which club lands closer to the planned distance and whether its misses are short, long, left or right.",reps:"8 shots, 4 with each club",target:"Choose the club with the more reliable landing pattern",why:"A compact distance decision exercise without a full carry-mapping session."},
+  {id:"tee-landing-window",name:"Tee-shot landing window",where:"R",focus:["driving","driving-left","driving-right","penalties"],kind:"skill",minutes:10,setup:"Choose a visible landing area with a near edge and a far edge, as well as left and right boundaries.",steps:"Alternate your driver and a safer tee club. Record each result as hit, left, right, short or long. Select the club that reaches the window most often.",reps:"12 shots, 6 with each club",target:"Find the club with at least 4 of 6 in the window",why:"Trains distance as well as direction rather than assuming every miss is sideways."},
+  {id:"contact-towel",name:"Towel behind the ball",where:"R",focus:["contact"],kind:"skill",minutes:10,setup:"Lay a small towel flat 6 inches behind a ball. Start with a wedge and a half swing.",steps:"Hit the ball without touching the towel. Use a shorter swing if you catch it; build length only after three clean strikes.",reps:"15 shots",target:"10 of 15 clean strikes",why:"Provides immediate feedback on contacting the ball before the ground."},
+  {id:"approach-three-windows",name:"Three approach windows",where:"R",focus:["approach","approach-short","approach-long","approach-dir"],kind:"skill",minutes:10,setup:"Choose three known approach distances with a safe landing window around each.",steps:"Change target and club after every shot. Record the landing result before hitting again. Use typical carry rather than your best shot.",reps:"15 shots, five per target",target:"9 of 15 in the planned window",why:"Builds distance decisions across different clubs."},
+  {id:"safe-recovery",name:"Recovery to a safe window",where:"R",focus:["recovery","general"],kind:"skill",minutes:10,setup:"Imagine a tree blocking a direct shot. Choose a generous clear landing area and a low-lofted club.",steps:"Use a small controlled swing toward the safe window. Change the window after every third ball. Judge position, not distance.",reps:"12 controlled shots",target:"10 of 12 leave a clear next shot",why:"Practices a practical response to trouble without a high-risk recovery."}
+);
+
 var byId = Object.fromEntries(DRILLS.map((d) => [d.id, d]));
 var TEMPLATES = {
   15: [{ role: "Main drill", pick: "primary-skill", min: 9 }, { role: "Test", pick: "primary-test", min: 6 }],
@@ -1047,49 +1058,66 @@ function rotate(candidates, recentIds, seed) {
   if (!pool.length) return null;
   return pool[seed % pool.length];
 }
+var SESSION_STYLES = {
+  15: {title:"Quick tune-up",text:"One focused skill and a short check. Minimal setup."},
+  30: {title:"Build a repeatable skill",text:"Warm up, work on a different skill drill, then test it and a supporting skill."},
+  45: {title:"Add variety and pressure",text:"Two ways to train your main skill, a supporting skill, and a pressure finish."},
+  60: {title:"Take it to the course",text:"A full session with distance or lie changes, a scored test, and a one-ball course simulation."}
+};
+function shortTest(focus) {
+  const area=FOCUS[focus].area;
+  const defs=area==="putting"?{name:"Six-putt finish",where:"G",setup:focus==="shortputts"?"Six putts from 3–6 ft, with different breaks.":"Six putts from 20–40 ft, with different slopes.",steps:focus==="shortputts"?"One attempt per spot, using your full routine. Count makes.":"One attempt per spot. Count first putts finishing inside 3 ft.",reps:"6 first attempts",target:"4 of 6 successful"}
+    :area==="short"?{name:"Five-chip finish",where:"C",setup:"Five different lies around one practice green.",steps:"One chip per spot. Count balls finishing inside 6 ft. Do not replay a miss.",reps:"5 chips",target:"3 of 5 inside 6 ft"}
+    :{name:"Six-shot finish",where:"R",setup:"Pick six different safe targets using clubs for your main skill.",steps:"One ball and your full routine for each target. Count balls finishing in the safe area. Use a comfortable club rather than forcing extra distance.",reps:"6 shots",target:"4 of 6 in the safe area"};
+  return {id:"quick-test-"+focus,focus:[focus],kind:"test",why:"A short check that fits the time available.",...defs};
+}
+function courseSimulation(focus) {
+  const area=FOCUS[focus].area;
+  const defs=area==="putting"?{name:"One-ball putting course",where:"G",setup:"Choose nine different starting points: three short, three medium, three long.",steps:"Play one ball, use your full routine and hole out every time. Change distance and break each hole. No second attempts.",reps:"9 holes",target:"18 putts or fewer"}
+    :area==="short"?{name:"One-ball short-game course",where:"C",setup:"Choose six different lies: fringe, rough, uphill, downhill and two tighter spots.",steps:"Chip or pitch one ball, then hole out. Change club or landing spot as the lie requires. Record the total.",reps:"6 holes",target:"15 strokes or fewer"}
+    :{name:"Six-hole range course",where:"R",setup:"Picture six holes from a familiar course, including the trouble and landing areas.",steps:"Play a tee shot and an approach for each hole, changing clubs and targets. Use your normal routine. After a miss, choose a safe next shot rather than replaying it.",reps:"6 imagined holes, about 12–18 shots",target:"4 tee shots in play and 3 approaches in the green-sized target"};
+  return {id:"course-sim-"+focus,focus:[focus],kind:"transfer",why:"Tests whether the skill holds up when you get one attempt and the target keeps changing.",...defs};
+}
+function supportingPractice(focus) {
+  const area=FOCUS[focus].area;
+  const defs=area==="putting"?{name:"Three putting distances",where:"G",setup:"Three spots at 4, 15 and 30 ft from one hole.",steps:"Roll three balls from each spot. Use the same routine and judge both start line and speed. Move to the next distance after three attempts.",reps:"9 putts",target:"Make 2 of 3 short putts; leave 4 of 6 longer putts inside 3 ft"}
+    :area==="short"?{name:"Choose your landing spot",where:"C",setup:"One easy chip with a safe landing spot just onto the green.",steps:"Chip three balls with a wedge, then three with a lower-lofted club. Choose the club that gets closer and hit three more with it.",reps:"9 chips",target:"5 of 9 finish inside 6 ft"}
+    :{name:"Three safe targets",where:"R",setup:"Three generous landing areas, using a comfortable club for each.",steps:"Hit three balls to each target. Use your full routine and record whether each finishes safely. Change club when changing target.",reps:"9 shots",target:"6 of 9 finish in the safe area"};
+  return {id:"support-"+focus,minutes:8,focus:[focus],kind:"skill",why:"A short supporting exercise that fits this session's time budget.",...defs};
+}
 function buildSession(focusKey, minutes, history2 = [], opts2 = {}) {
-  const focus = FOCUS[focusKey] ? focusKey : "general";
-  const secondary = opts2.secondary && opts2.secondary !== focus ? opts2.secondary : FOCUS[focus].partner;
-  const recent = new Set(history2.slice(-2).flatMap((p) => (p.drills || []).map((d) => d.id)));
-  const seed = history2.length;
-  const used = /* @__PURE__ */ new Set();
-  const tpl = TEMPLATES[minutes] || TEMPLATES[30];
-  const forFocus = (f, kinds) => DRILLS.filter((d) => d.focus.includes(f) && kinds.includes(d.kind) && !used.has(d.id));
-  const area = FOCUS[focus].area;
-  const blocks = [];
-  for (const slot of tpl) {
-    let cands = [];
-    if (slot.pick === "warmup") {
-      cands = DRILLS.filter((d2) => d2.kind === "warmup" && !used.has(d2.id));
-      if (area === "tee" || area === "approach") cands = [{ id: "range-warmup", name: "Wedge warm-up", where: "R", focus: [], kind: "warmup", minutes: 5, level: 1, setup: "Pitching wedge, a target 60\u201380 yards away.", steps: "Half swings building to three-quarter swings. No full swings until the last three balls.", reps: "12 balls", target: "Last 6 balls finish within 10 yards of the target", why: "Gets you striking cleanly before the measured work." }];
-    } else if (slot.pick === "primary-skill" || slot.pick === "primary-skill2") cands = forFocus(focus, ["skill"]);
-    else if (slot.pick === "primary-test") cands = [...forFocus(focus, ["test"]), ...forFocus(focus, ["transfer"])];
-    else if (slot.pick === "secondary-skill") {
-      cands = forFocus(secondary, ["skill"]);
-      if (!cands.length) cands = forFocus(secondary, ["transfer", "test"]);
-      if (!cands.length) cands = forFocus(FOCUS[focus].partner, ["skill"]);
-    } else if (slot.pick === "secondary-test") cands = [...forFocus(secondary, ["test"]), ...forFocus(secondary, ["transfer"])];
-    else if (slot.pick === "transfer") cands = DRILLS.filter((d2) => d2.kind === "transfer" && !used.has(d2.id) && (d2.focus.includes(focus) || d2.focus.includes("general") || d2.focus.includes("recovery")));
-    if (!cands.length) cands = forFocus(focus, ["skill", "transfer", "test"]);
-    if (!cands.length) cands = forFocus(secondary, ["skill", "transfer", "test"]);
-    if (!cands.length) cands = DRILLS.filter((d2) => !used.has(d2.id) && d2.focus.includes("general"));
-    const d = rotate(cands, recent, seed + blocks.length);
-    if (!d) continue;
-    used.add(d.id);
-    blocks.push({ ...d, role: slot.role, minutes: slot.min });
-  }
-  const where = [...new Set(blocks.map((b) => b.where))];
-  return {
-    focus,
-    focusLabel: FOCUS[focus].label,
-    secondary,
-    secondaryLabel: FOCUS[secondary]?.label,
-    minutes,
-    blocks,
-    where,
-    why: opts2.why || "",
-    total: blocks.reduce((s, b) => s + b.minutes, 0)
+  const focus=FOCUS[focusKey]?focusKey:"general";
+  const duration=[15,30,45,60].includes(Number(minutes))?Number(minutes):30;
+  const secondary=FOCUS[opts2.secondary]&&opts2.secondary!==focus?opts2.secondary:FOCUS[focus].partner;
+  const recent=new Set(history2.slice(-2).flatMap(p=>(p.drills||[]).map(d=>d.id)));
+  const used=new Set(),blocks=[];
+  const durationIndex=[15,30,45,60].indexOf(duration);
+  const choose=(f,kinds,offset=0,maxMinutes=Infinity)=>{
+    const all=DRILLS.filter(d=>d.focus.includes(f)&&kinds.includes(d.kind)&&!used.has(d.id));
+    const fitting=all.filter(d=>d.minutes<=maxMinutes);const candidates=Number.isFinite(maxMinutes)?fitting:all;
+    const fresh=candidates.filter(d=>!recent.has(d.id));const pool=fresh.length?fresh:candidates;
+    return pool.length?pool[(history2.length+durationIndex+offset)%pool.length]:null;
   };
+  const add=(d,role,min)=>{if(!d)return;used.add(d.id);blocks.push({...d,role,baseMinutes:d.minutes||min,minutes:min});};
+  const primary=choose(focus,["skill","transfer","test"],0,duration<=30?10:12)||supportingPractice(focus);
+  if(duration===15){add(primary,"Focused skill",10);add(shortTest(focus),"Quick check",5);}
+  else{
+    const range=["tee","approach","course"].includes(FOCUS[focus].area);
+    const warm=range?{id:"range-warmup",name:"Easy wedge warm-up",where:"R",setup:"One comfortable wedge and a nearby target.",steps:"Start with half swings and build gently toward three-quarter swings. Focus on balance and contact.",reps:"10–12 easy shots",target:"Finish with 4 balanced swings",why:"Prepares you for measured shots."}:choose("lag",["warmup"]);
+    add(warm,"Warm-up",5);add(primary,"Main skill",duration===30?10:12);
+    if(duration>=45){
+      const variation=choose(focus,["skill","transfer","test"],1,10)||choose(secondary,["skill"],1,10)||{...supportingPractice(focus),id:"variation-"+focus};
+      add(variation,"Change the task",10);
+    }
+    add(choose(secondary,["skill","transfer","test"],0,duration===30?8:10)||supportingPractice(secondary),"Supporting skill",duration===30?8:10);
+    if(duration===30)add(shortTest(focus),"Pressure check",7);
+    if(duration===45)add(shortTest(focus),"Pressure check",8);
+    if(duration===60){add(choose(focus,["test","transfer"],0,8)||shortTest(focus),"Scored test",8);add(courseSimulation(focus),"One-ball course simulation",15);}
+  }
+  // Rare sparse-focus fallback: fill a missing slot with a relevant short test.
+  const total=blocks.reduce((sum,b)=>sum+b.minutes,0);
+  if(total<duration)add({...shortTest(secondary),id:"finish-"+secondary},"Finish and measure",duration-total);
+  return {focus,focusLabel:FOCUS[focus].label,secondary,secondaryLabel:FOCUS[secondary]?.label,minutes:duration,blocks,where:[...new Set(blocks.map(b=>b.where))],why:opts2.why||"",total:blocks.reduce((sum,b)=>sum+b.minutes,0),style:SESSION_STYLES[duration]};
 }
 var WHERE_LABEL = { G: "Putting green", C: "Chipping area", R: "Range" };
 
@@ -1694,27 +1722,27 @@ var CARD = {
   width: 10.4,
   panel: 5.2,
   pad: 0.12,
-  label: 0.58,
+  label: 0.72,
   rows: {
     hole: 0.25,
     par: 0.21,
     yds: 0.19,
     hcp: 0.17,
-    parBlank: 0.27,
+    parBlank: 0.23,
     score: 0.42,
     putts: 0.36,
-    fairway: 0.31,
+    fairway: 0.68,
     penalty: 0.31,
-    zone: 0.5,
-    approach: 0.5,
-    contact: 0.5,
-    short: 0.31
+    zone: 0.68,
+    approach: 0.56,
+    contact: 0.56,
+    short: 0.38
   }
 };
 var cardCSS = `
 .ag-sheet{width:10.5in;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:.42in;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.ag-card{position:relative;width:${CARD.width}in;display:grid;grid-template-columns:${CARD.panel}in ${CARD.panel}in;border:.6pt solid #000;box-sizing:border-box;background:#fff}
-.ag-panel{padding:${CARD.pad}in ${CARD.pad}in .1in;box-sizing:border-box;display:flex;flex-direction:column}
+.ag-card{position:relative;width:${CARD.width}in;display:flex;border:.6pt solid #000;box-sizing:border-box;background:#fff}
+.ag-panel{width:50%;max-width:50%;min-width:0;flex:1 1 0;padding:${CARD.pad}in ${CARD.pad}in .1in;box-sizing:border-box;display:flex;flex-direction:column}
 .ag-fold{position:absolute;top:0;bottom:0;left:50%;border-left:.6pt dashed #777}
 .ag-fold-label{position:absolute;left:50%;transform:translateX(-50%);font-size:6pt;letter-spacing:.08em;color:#555;background:#fff;padding:0 3pt}
 .ag-fold-label.t{top:-.17in}.ag-fold-label.b{bottom:-.17in}
@@ -1728,30 +1756,30 @@ var cardCSS = `
 .ag-reg.tr{top:.04in;right:.04in;border-top:1.6pt solid #000;border-right:1.6pt solid #000}
 .ag-reg.bl{bottom:.04in;left:.04in;border-bottom:1.6pt solid #000;border-left:1.6pt solid #000}
 .ag-reg.br{bottom:.04in;right:.04in;border-bottom:1.6pt solid #000;border-right:1.6pt solid #000}
-.ag-head{display:flex;align-items:flex-end;justify-content:space-between;gap:.08in;height:.3in;margin:0 0 .05in;font-size:7pt;line-height:1.15}
+.ag-head{display:flex;align-items:flex-end;justify-content:space-between;gap:.08in;min-height:.36in;margin:0 0 .05in;font-size:7pt;line-height:1.15}
 .ag-brand{font-weight:800;font-size:9pt;letter-spacing:-.01em;white-space:nowrap}
 .ag-brand small{display:block;font-weight:600;font-size:6pt;letter-spacing:.12em;color:#333}
-.ag-meta{text-align:right;flex:1;min-width:0}
+.ag-meta{text-align:right;flex:1;min-width:0;font-size:7pt;overflow-wrap:anywhere}
 .ag-meta b{font-size:8pt}
 .ag-line{display:inline-block;border-bottom:.5pt solid #000;min-width:.8in;height:.13in;vertical-align:bottom}
-.ag-grid{border-collapse:collapse;table-layout:fixed;width:${CARD.panel - CARD.pad * 2}in}
+.ag-grid{border-collapse:collapse;table-layout:fixed;width:100%}
 .ag-grid col.l{width:${CARD.label}in}
 .ag-grid th,.ag-grid td{border:.5pt solid #000;padding:0;text-align:center;vertical-align:middle;overflow:hidden}
-.ag-grid th.rl{text-align:left;padding-left:.04in;font-size:6.6pt;font-weight:800;letter-spacing:.02em;line-height:1.05}
-.ag-grid th.rl small{display:block;font-size:6pt;font-weight:600;letter-spacing:0;color:#222}
+.ag-grid th.rl{text-align:left;padding-left:.035in;font-size:7pt;font-weight:800;letter-spacing:.02em;line-height:1.05}
+.ag-grid th.rl small{display:block;margin-top:3pt;font-size:5.8pt;font-weight:600;letter-spacing:0;color:#222}
 .ag-grid thead th{font-size:10.5pt;font-weight:800;height:${CARD.rows.hole}in}
 .ag-grid thead th.rl{font-size:6.6pt}
 .ag-grid tr.pre td{font-size:7.5pt;font-weight:700}
 .ag-grid tr.pre.yds td,.ag-grid tr.pre.hcp td{font-size:6.5pt;font-weight:500}
 .ag-grid tr.pre th.rl,.ag-grid tr.pre td{border-color:#000}
-.ag-grid tr.write td{background:#fff}
+.ag-grid tr.write td{background:#fff}.ag-grid tr.write th.rl{background:#f0f3f0}.ag-grid thead th{background:#e8eee9}.ag-opts.words{flex-direction:column;flex-wrap:nowrap;padding:2pt 0;justify-content:space-evenly;align-items:center;font-size:7.1pt;letter-spacing:0}.ag-opts.words span{width:100%;line-height:1.15;white-space:nowrap}.ag-grid tr.pre td{background:#f6f7f5}
 .ag-grid tr.thick td,.ag-grid tr.thick th{border-top-width:1.2pt}
 .ag-opts{display:flex;flex-wrap:wrap;justify-content:space-evenly;align-content:space-evenly;height:100%;padding:0 .03in;font-size:8.2pt;font-weight:700;letter-spacing:.01em}
 .ag-opts span{display:inline-block;min-width:.13in;text-align:center;line-height:1}
 .ag-opts.two span{width:45%}
 .ag-opts.three span{width:31%}
 .ag-na{font-size:7pt;color:#666}
-.ag-legend{margin-top:.06in;font-size:6.9pt;line-height:1.32;color:#000}
+.ag-legend{margin-top:.1in;padding-top:.06in;border-top:.5pt solid #999;font-size:7pt;line-height:1.4;color:#000}
 .ag-legend b{font-weight:800}
 .ag-code{position:absolute;bottom:.05in;right:.24in;font-size:6pt;letter-spacing:.1em;color:#444}
 `;
@@ -1772,25 +1800,25 @@ function panelHTML({ start, course, detailed, front, code }) {
   if (hasHcp) rows.push(rowHTML("HCP", "", "pre hcp", R.hcp, idx.map((i) => `<td>${esc(hole(i).handicap || "")}</td>`)));
   rows.push(rowHTML("SCORE", "incl. penalties", "write thick", R.score, idx.map(() => "<td></td>")));
   rows.push(rowHTML("PUTTS", "on green only", "write", R.putts, idx.map(() => "<td></td>")));
-  rows.push(rowHTML("FAIRWAY", "circle one", "write", R.fairway, idx.map((i) => `<td>${hasPar && Number(hole(i).par) === 3 ? '<span class="ag-na">\u2014</span>' : opts(["H", "L", "R"])}</td>`)));
-  rows.push(rowHTML("PENALTY", "strokes", "write", R.penalty, idx.map(() => "<td></td>")));
-  rows.push(rowHTML("1ST PUTT", "circle zone", "write", R.zone, idx.map(() => `<td>${opts(["A", "B", "C", "D", "E"], "three")}</td>`)));
+  rows.push(rowHTML("TEE SHOT", "circle result", "write", R.fairway, idx.map((i) => `<td>${hasPar && Number(hole(i).par) === 3 ? '<span class="ag-na">\u2014</span>' : opts(["HIT", "LEFT", "RIGHT", "SHORT", "LONG"], "words")}</td>`)));
+  rows.push(rowHTML("PENALTIES", "0 if none", "write", R.penalty, idx.map(() => "<td></td>")));
+  rows.push(rowHTML("1ST PUTT", "distance in feet", "write", R.zone, idx.map(() => `<td>${opts(["A: <3", "B: 3–6", "C: 6–15", "D: 15–30", "E: 30+"], "words")}</td>`)));
   if (detailed) {
-    rows.push(rowHTML("APPROACH", "if green missed", "write thick", R.approach, idx.map(() => `<td>${opts(["SH", "LG", "LT", "RT"], "two")}</td>`)));
-    rows.push(rowHTML("CONTACT", "approach", "write", R.contact, idx.map(() => `<td>${opts(["SOL", "FAT", "THN"], "two")}</td>`)));
-    rows.push(rowHTML("SHORT MISS", "\u2264 5 ft putt", "write", R.short, idx.map(() => `<td>${opts(["Y", "N"])}</td>`)));
+    rows.push(rowHTML("APPROACH", "if green missed", "write thick", R.approach, idx.map(() => `<td>${opts(["SHORT", "LONG", "LEFT", "RIGHT"], "words")}</td>`)));
+    rows.push(rowHTML("CONTACT", "approach", "write", R.contact, idx.map(() => `<td>${opts(["SOLID", "FAT", "THIN"], "words")}</td>`)));
+    rows.push(rowHTML("SHORT PUTT", "missed ≤5 ft?", "write", R.short, idx.map(() => `<td>${opts(["YES", "NO"], "words")}</td>`)));
   }
   const name = course ? `<b>${esc(course.name)}</b> \xB7 ${esc(course.tees || "")}` : 'Course <span class="ag-line" style="min-width:1.5in"></span> Tees <span class="ag-line" style="min-width:.5in"></span>';
   const head = front ? `<div class="ag-head"><div class="ag-brand">ATTEST GOLF<small>${detailed ? "DETAILED CARD" : "POCKET CARD"} \xB7 HOLES 1\u20139 \xB7 ${code}</small></div><div class="ag-meta">${name}<br>Date <span class="ag-line" style="min-width:.75in"></span></div></div>` : `<div class="ag-head"><div class="ag-brand">HOLES 10\u201318<small>${course ? esc(course.name).toUpperCase().slice(0, 34) : "ATTEST GOLF"}</small></div><div class="ag-meta">Name <span class="ag-line" style="min-width:1.25in"></span></div></div>`;
-  const legend = front ? `<div class="ag-legend"><b>FAIRWAY</b> H hit \xB7 L left \xB7 R right. <b>1ST PUTT</b> length of your first putt: <b>A</b> under 3 ft \xB7 <b>B</b> 3\u20136 \xB7 <b>C</b> 6\u201315 \xB7 <b>D</b> 15\u201330 \xB7 <b>E</b> 30+.</div>` : `<div class="ag-legend"><b>PUTTS</b> count only strokes on the green. Leave a box empty if you didn\u2019t track it \u2014 don\u2019t write 0 unless it was 0.${detailed ? " <b>APPROACH</b> SH short \xB7 LG long \xB7 LT left \xB7 RT right (circle only if the green was missed). <b>CONTACT</b> solid / fat / thin." : ""}</div>`;
+  const legend = `<div class="ag-legend"><b>WRITE</b> your total score, putts and penalty strokes. <b>CIRCLE</b> one tee-shot result and one first-putt distance. Skip tee shot on par 3s. Blank = not tracked; 0 = none.<br><b>SHORT / LONG</b> = stopped before / went beyond the fairway landing area. Putts count on the green only.${detailed ? "<br><b>EXTRA DETAIL</b> Circle an approach miss only if you missed the green; circle approach contact and whether you missed a putt of 5 ft or less." : ""}</div>`;
   return `<div class="ag-panel">${head}<table class="ag-grid"><colgroup><col class="l">${idx.map(() => "<col>").join("")}</colgroup><thead><tr><th class="rl">HOLE</th>${idx.map((i) => `<th>${i + 1}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table>${legend}</div>`;
 }
 function cardHTML({ course = null, detailed = false } = {}) {
-  const code = `AG-${detailed ? "D" : "B"}2`;
+  const code = `AG-${detailed ? "D" : "B"}3`;
   return `<article class="ag-card" data-layout="${code}">${panelHTML({ start: 0, course, detailed, front: true, code })}${panelHTML({ start: 9, course, detailed, front: false })}<div class="ag-fold"></div><i class="ag-crop tl"></i><i class="ag-crop tr"></i><i class="ag-crop bl"></i><i class="ag-crop br"></i><i class="ag-reg tl"></i><i class="ag-reg tr"></i><i class="ag-reg bl"></i><i class="ag-reg br"></i></article>`;
 }
 function sheetHTML({ course = null, detailed = false } = {}) {
-  const n = detailed ? 1 : 2;
+  const n = 1;
   return `<div class="ag-sheet">${Array.from({ length: n }, () => cardHTML({ course, detailed })).join("")}</div>`;
 }
 
@@ -1984,7 +2012,7 @@ function scoreMark(score, par) {
   const cls = d <= -2 ? "eagle" : d === -1 ? "birdie" : d === 0 ? "par" : d === 1 ? "bogey" : "double";
   return `<span class="mk ${cls}">${score}</span>`;
 }
-var FW_SHOW = { H: '<span class="fw-hit" aria-label="hit">\u25CF</span>', L: '<span aria-label="left">\u2190</span>', R: '<span aria-label="right">\u2192</span>', NA: "" };
+var FW_SHOW = { H: '<span class="fw-hit" aria-label="hit">\u25CF</span>', L: '<span aria-label="left">\u2190</span>', R: '<span aria-label="right">\u2192</span>', S: '<span aria-label="short">Short</span>', LG: '<span aria-label="long">Long</span>', NA: "" };
 function scorecardGrid(r, { showPutts = true, compact = false } = {}) {
   const hs = holesPlayed(r);
   const anyPen = hs.some((h) => h.penalties > 0);
@@ -2049,7 +2077,7 @@ function splitBar(parts) {
 }
 
 // js/app.js
-var VERSION = "2.0.0";
+var VERSION = "2.4.0";
 var params2 = new URLSearchParams(location.search);
 var DEMO = params2.get("demo") === "1";
 var data;
@@ -2067,6 +2095,7 @@ var S = {
   prepared: null,
   photoUrl: "",
   scanBusy: false,
+  scanError: "",
   courseResults: null,
   courseInfo: null,
   courseBusy: false,
@@ -2079,6 +2108,7 @@ var S = {
   printType: pref.get("cardType", "basic"),
   printCourse: "",
   editCourseIdx: null,
+  printZoom: false,
   swWaiting: null
 };
 function persist() {
@@ -2087,7 +2117,7 @@ function persist() {
   if (!r.ok) toast(r.error, "error");
   return r.ok;
 }
-var FLOWS = /* @__PURE__ */ new Set(["new", "course", "course-confirm", "entry", "scan", "scan-review", "review", "share", "onboarding"]);
+var FLOWS = /* @__PURE__ */ new Set(["new", "course", "course-confirm", "entry", "scan", "scan-review", "review", "share", "onboarding", "course-card-guide"]);
 function route() {
   const h = location.hash.replace(/^#\/?/, "");
   const [name, ...rest] = h.split("/");
@@ -2164,8 +2194,8 @@ function renderOnboarding() {
     <h1>Attest Golf</h1>
     <p class="lead">Keep your phone in your bag. Mark a pocket card with a pencil as you play, photograph it afterwards, and see what to work on.</p>
     <ol class="steps">
-      <li><b>Print a pocket card</b> \u2014 or use the course\u2019s own scorecard.</li>
-      <li><b>Mark five things per hole</b>: score, putts, fairway, penalties, and how far your first putt was.</li>
+      <li><b>Choose either card:</b> print an Attest card, or <a href="#/course-card-guide">use the course’s scorecard</a>.</li>
+      <li><b>Mark five things on paper:</b> score, putts, tee-shot result, penalties and first-putt distance. Your phone stays put away.</li>
       <li><b>Photograph the card</b> after the round. You check every reading before anything is saved.</li>
     </ol>
     <button class="btn primary block" data-act="onboard-done">Get started</button>
@@ -2187,9 +2217,10 @@ PAGES.home = () => {
     const old = !data.meta.lastBackupAt || Date.now() - Date.parse(data.meta.lastBackupAt) > 30 * 864e5;
     if (since >= 3 || old && since > 0) out.push(`<a class="resume warn" href="#/backup"><div><b>Back up your rounds</b><small>${since} round${since === 1 ? "" : "s"} since your last backup. Safari can clear website data.</small></div>${icon("chevron", 18)}</a>`);
   }
-  out.push(`<button class="btn primary block big" data-act="go" data-to="new">${icon("plus", 22)} Record a round</button>`);
+  out.push(`<button class="btn primary block big" data-act="go" data-to="new">${icon("plus", 22)} Add a finished round</button>`);
+  out.push(`<a class="choice course-card-link" href="#/course-card-guide">${icon("pencil",26)}<span><b>Before you play: scorecard key</b><small>Use either paper card. Review the key, then put your phone away.</small></span>${icon("chevron",20)}</a>`);
   if (!data.rounds.length) {
-    out.push(`<section class="group empty-state"><h2>No rounds yet</h2><p>Print a card before your next round, or enter a past round from a scorecard you kept.</p><div class="btn-row"><a class="btn" href="#/print">${icon("print", 20)} Print cards</a><a class="btn" href="?demo=1">See the demo</a></div></section></div>`);
+    out.push(`<section class="group empty-state"><h2>No rounds yet</h2><p>Print an Attest card or use the course’s own scorecard. After playing, add a photo or type your scores.</p><div class="btn-row"><a class="btn" href="#/print">${icon("print", 20)} Print cards</a><a class="btn" href="?demo=1">See the demo</a></div></section></div>`);
     return out.join("");
   }
   const recent = complete18().slice(-10);
@@ -2249,7 +2280,7 @@ PAGES.rounds = () => {
   }
   if (month) body += "</section>";
   return `<div class="page"><header class="page-head"><h1>Rounds</h1><p class="lead">${plural2(data.rounds.length, "round")} on this phone.</p></header>
-    <button class="btn primary block" data-act="go" data-to="new">${icon("plus", 22)} Record a round</button>
+    <button class="btn primary block" data-act="go" data-to="new">${icon("plus", 22)} Add a finished round</button>
     ${body || '<section class="group empty-state"><p>Rounds you record appear here.</p></section>'}</div>`;
 };
 PAGES.round = (id) => {
@@ -2278,7 +2309,7 @@ PAGES.round = (id) => {
     out.push(`<section class="group coach"><h2>Next priority</h2><p class="coach-title">${esc2(p.title)}</p><p>${esc2(p.evidence)}</p>${p.recurringNote ? `<p class="recur ${/pattern/.test(p.recurringNote) ? "yes" : ""}">${esc2(p.recurringNote)}</p>` : ""}<p class="advice">${esc2(p.advice)}</p>${p.todayNote ? `<p class="pattern">${esc2(p.todayNote)}</p>` : ""}<a class="btn" href="#/practice" data-act="practice-focus" data-focus="${esc2(p.focus)}">Plan practice</a></section>`);
   }
   out.push(`<section class="group"><h2>Round stats</h2>
-    ${row("Fairways", s.fairways.n ? `${s.fairways.hit}/${s.fairways.n}` : "\u2014", s.fairways.misses ? `${s.fairways.left} left, ${s.fairways.right} right` : "")}
+    ${row("Fairways", s.fairways.n ? `${s.fairways.hit}/${s.fairways.n}` : "\u2014", s.fairways.misses ? `${s.fairways.left} left, ${s.fairways.right} right, ${s.fairways.short} short, ${s.fairways.long} long` : "")}
     ${row('Greens in regulation <span class="est">est.</span>', s.gir.n ? `${s.gir.hit}/${s.gir.n}` : "\u2014", s.gir.ambiguous ? `${plural2(s.gir.ambiguous, "hole")} left out \u2014 see below` : "From score minus putts")}
     ${row("Putts", s.putting.n === s.holesN && s.holesN ? holesPlayed(r).reduce((a, x) => a + (x.putts || 0), 0) : s.putting.n ? `${f12(s.putting.perHole)} per hole` : "\u2014", s.putting.n ? `${plural2(s.putting.onePutt, "one-putt")}, ${plural2(s.putting.threePutt, "three-putt")}` : "")}
     ${row('Putts on greens hit <span class="est">est.</span>', s.putting.onGIR.n ? f12(s.putting.onGIR.avg) : "\u2014", nOfText(s.putting.onGIR.n))}
@@ -2301,7 +2332,7 @@ AFTER.round = (id) => {
   });
 };
 PAGES.insights = () => {
-  if (!data.rounds.length) return `<div class="page"><header class="page-head"><h1>Insights</h1></header><section class="group empty-state"><p>Record a round to see your scoring, driving, short game and putting.</p></section></div>`;
+  if (!data.rounds.length) return `<div class="page"><header class="page-head"><h1>Insights</h1></header><section class="group empty-state"><p>Add a finished round to see your scoring, driving, short game and putting.</p></section></div>`;
   const all = sortByDate(data.rounds);
   const rs = S.range === 0 ? all : all.slice(-S.range);
   const s = summarize(rs);
@@ -2326,7 +2357,7 @@ PAGES.insights = () => {
     </section>
     <section class="group"><h2>Off the tee</h2>
       ${row("Fairways hit", pct(s.fairways.pct), nOfText(s.fairways.n) + " (par 4s and 5s)")}
-      ${s.fairways.misses ? splitBar([{ label: "Left", value: s.fairways.left, cls: "c4" }, { label: "Hit", value: s.fairways.hit, cls: "c2" }, { label: "Right", value: s.fairways.right, cls: "c4" }]) : ""}
+      ${s.fairways.misses ? splitBar([{ label: "Left", value: s.fairways.left, cls: "c4" }, { label: "Hit", value: s.fairways.hit, cls: "c2" }, { label: "Right", value: s.fairways.right, cls: "c4" }, { label: "Short", value: s.fairways.short, cls: "c3" }, { label: "Long", value: s.fairways.long, cls: "c1" }]) : ""}
       ${row("Penalty strokes", f12(s.penalties.per18), `per 18, from ${nOfText(s.penalties.n)}`)}
     </section>
     <section class="group"><h2>Approach <span class="est">estimated</span></h2>
@@ -2364,11 +2395,13 @@ PAGES.practice = () => {
     <section class="group">
       <label class="field"><span>Focus</span><select data-bind="practice-focus">${Object.entries(FOCUS).filter(([k]) => !["approach"].includes(k)).map(([k, v]) => `<option value="${k}" ${k === focus ? "selected" : ""}>${esc2(v.label)}${k === suggested ? " (suggested)" : ""}</option>`).join("")}</select></label>
       <div class="seg" role="group" aria-label="Session length">${[15, 30, 45, 60].map((m) => `<button class="${S.practice.minutes === m ? "on" : ""}" data-act="minutes" data-v="${m}" aria-pressed="${S.practice.minutes === m}">${m} min</button>`).join("")}</div>
+      <div class="session-summary" aria-live="polite"><b>${sess.minutes} minutes · ${sess.blocks.length} activities</b><h2>${esc2(sess.style.title)}</h2><p>${esc2(sess.style.text)}</p><div class="session-timeline">${sess.blocks.map(b=>`<span style="flex:${b.minutes}">${b.minutes}m</span>`).join("")}</div></div>
       ${why ? `<p class="fine">Why: ${esc2(why)}</p>` : ""}
       <p class="fine">You\u2019ll need: ${sess.where.map((w) => WHERE_LABEL[w]).join(", ").toLowerCase()}.</p>
     </section>
+    <p class="fine">Complete the listed set, then repeat within the time shown. Move on when that block’s time is up.</p>
     <ol class="plan">${sess.blocks.map((b, i) => `<li class="drill">
-      <div class="drill-head"><span class="drill-min">${b.minutes} min</span><div><small>${esc2(b.role)}</small><h3>${esc2(b.name)}</h3></div></div>
+      <div class="drill-head"><span class="drill-min">${b.minutes} min</span><div><small>${i+1} · ${esc2(b.role)}</small><h3>${esc2(b.name)}</h3></div></div>
       <p><b>Set up:</b> ${esc2(b.setup)}</p><p><b>Do:</b> ${esc2(b.steps)}</p>
       <p class="drill-meta"><span><b>Reps</b> ${esc2(b.reps)}</span><span><b>Target</b> ${esc2(b.target)}</span></p>
       <p class="fine">${esc2(b.why)}</p>
@@ -2410,25 +2443,51 @@ PAGES.handicap = () => {
     <section class="group"><h2>Score differentials</h2>${list.length ? list.map((d) => `<div class="li ${d.used ? "used" : ""}"><span class="li-main"><b>${esc2(d.course)}</b><small>${esc2(dateLabel(d.date))} \u2014 gross ${d.gross}, adjusted ${d.ags}${d.adjustedHoles ? ` (${plural2(d.adjustedHoles, "hole")} capped at ${d.method})` : ""}${d.nine ? ", 9 holes + expected score" : ""}${d.siMissing ? ", stroke index missing \u2014 approximate" : ""}</small></span><span class="li-val">${f12(d.value)}${d.used ? " <small>used</small>" : ""}</span></div>`).join("") : '<p class="fine">No eligible rounds yet.</p>'}</section>
     <section class="group prose"><h2>How it\u2019s calculated</h2><p>Each round: (113 \xF7 slope) \xD7 (adjusted gross \u2212 course rating). Hole scores are capped at net double bogey for the adjusted score only \u2014 your real score is never changed. The estimate averages your lowest differentials from the last 20, using the World Handicap System table.</p><ul>${NOTES.map((n) => `<li>${esc2(n)}</li>`).join("")}</ul></section></div>`;
 };
+
+function courseScorecardInstructions() {
+  return `<p class="lead">Keep the same stats on paper. Review this key before you play, put your phone away, and upload the card after the round.</p>
+    <section class="group"><h2>Your quick marking key</h2>
+      <div class="paper-key-row"><b>Score</b><span>Total strokes, including penalties.</span></div>
+      <div class="paper-key-row"><b>Putts</b><span>Strokes on the green only.</span></div>
+      <div class="paper-key-row"><b>Tee shot</b><span><b>H</b> hit · <b>L</b> left · <b>R</b> right · <b>S</b> short · <b>LG</b> long.</span></div>
+      <div class="paper-key-row"><b>Penalties</b><span>Add one <b>P</b> per penalty stroke in the tee-shot box. <b>R P</b> = right, one penalty. No P = no penalties when a tee result is recorded.</span></div>
+      <div class="paper-key-row"><b>First putt</b><span>Write one distance letter. Estimate the range; no measuring needed.</span></div>
+      <div class="putt-distance-key" aria-label="First-putt distance key"><div><b>A</b><span>Under 3 ft</span></div><div><b>B</b><span>3–6 ft</span></div><div><b>C</b><span>Over 6–15 ft</span></div><div><b>D</b><span>Over 15–30 ft</span></div><div><b>E</b><span>Over 30 ft</span></div></div>
+      <p class="fine">Short / long means before / beyond the fairway landing area. On a par 3, write a dash instead of a tee result; add any penalty Ps beside it. Leave first-putt distance blank if you did not putt. Leave anything you did not track empty.</p></section>
+    <section class="group"><h2>Using the course’s scorecard?</h2><p>Use four player rows for your own tracking. Write these labels in the player-name boxes before you tee off:</p>
+      <div class="tbl-wrap"><table class="tbl card-example"><caption class="sr">Four-row course scorecard example with all five stats</caption><thead><tr><th scope="col">Row label</th><th scope="col">Hole 1</th><th scope="col">Hole 2</th><th scope="col">Hole 3</th></tr></thead><tbody><tr><th scope="row">SCORE</th><td>5</td><td>4</td><td>6</td></tr><tr><th scope="row">PUTTS</th><td>2</td><td>1</td><td>2</td></tr><tr><th scope="row">TEE + PEN</th><td>H</td><td>R P</td><td>S P P</td></tr><tr><th scope="row">1ST PUTT</th><td>D</td><td>B</td><td>D</td></tr></tbody></table></div>
+      <p><b>After each hole:</b> write score and putts, then a tee code, any penalty Ps, and a putt-distance letter.</p><p class="fine">Add your name beside SCORE if others share the card. Use a separate course card if there are not enough spare rows for your stats.</p></section>
+    <details class="group"><summary>Using an Attest printed card?</summary><p>The rows and choices are already printed. Write score, putts and penalty strokes. Circle the tee-shot result and first-putt distance. Use the separate penalty row, rather than adding Ps to the tee result.</p><p>The Detailed card also has approach, contact and short-putt-miss choices.</p></details>
+    <p class="paper-promise"><b>No app use while you play.</b> Just your paper card and a pencil. After the round, choose <b>Add a finished round</b>, photograph your card and check the readings.</p>`;
+}
+PAGES["course-card-guide"] = () => `<div class="page flow course-card-guide">${flowTop("Before your round", "", "Close")}
+  ${courseScorecardInstructions()}
+  <button class="btn primary block big" data-act="paper-ready">Ready to play · I’ll use my paper card</button>
+  <p class="fine center">Put your phone away. Come back after the round.</p>
+  <details class="group"><summary>Already finished playing?</summary><button class="btn block" data-act="course-card-photo">Upload my course scorecard</button><button class="btn block" data-act="go" data-to="new">Add an Attest card or enter scores myself</button></details></div>`;
 PAGES.print = () => {
   const course = S.printCourse !== "" ? data.courses[Number(S.printCourse)] : null;
-  return `<div class="page">${backBtn("more", "More")}<header class="page-head"><h1>Pocket cards</h1><p class="lead">Print, cut on the outer line, fold on the dashed line with the printing outside. Holes 1\u20139 face you; flip it for 10\u201318.</p></header>
+  return `<div class="page">${backBtn("more", "More")}<header class="page-head"><h1>Print a pocket card</h1><p class="lead">Choose your course, then print. Use a pencil while you play—your phone stays in your bag.</p></header>
+    <a class="choice course-card-link" href="#/course-card-guide">${icon("pencil",26)}<span><b>No printed card on hand?</b><small>Use the course’s scorecard · see marking directions</small></span>${icon("chevron",20)}</a>
     <section class="group">
-      <div class="seg" role="group" aria-label="Card type">${[["basic", "Standard"], ["detailed", "Detailed"]].map(([v, l]) => `<button class="${S.printType === v ? "on" : ""}" data-act="print-type" data-v="${v}" aria-pressed="${S.printType === v}">${l}</button>`).join("")}</div>
-      <p class="fine">${S.printType === "basic" ? "Score, putts, fairway, penalties and first-putt zone \u2014 about 10 seconds a hole. Two cards per sheet." : "Adds approach miss, contact and short putts missed. One card per sheet."}</p>
+      <div class="seg" role="group" aria-label="Card type">${[["basic", "Standard · recommended"], ["detailed", "Detailed"]].map(([v, l]) => `<button class="${S.printType === v ? "on" : ""}" data-act="print-type" data-v="${v}" aria-pressed="${S.printType === v}">${l}</button>`).join("")}</div>
+      <p class="fine">${S.printType === "basic" ? "Recommended: write three numbers and circle two choices per hole. One clear, larger card per sheet." : "Also circle approach miss, contact and whether you missed a short putt. One card per sheet."}</p>
       <label class="field"><span>Course</span><select data-bind="print-course"><option value="">Blank card \u2014 write pars yourself</option>${data.courses.map((c, i) => `<option value="${i}" ${String(i) === S.printCourse ? "selected" : ""}>${esc2(c.name)}, ${esc2(c.tees || "tees not set")}</option>`).join("")}</select></label>
       ${course && course.holes.some((h) => h.par === "") ? note("This course is missing some pars, so the par row will be left blank to write in.", "warn") : ""}
     </section>
-    <div class="card-preview" aria-label="Preview of the printed card"><style>${cardCSS}</style><div class="card-scale">${sheetHTML({ course, detailed: S.printType === "detailed" })}</div></div>
-    <button class="btn primary block" data-act="print">${icon("print", 20)} Print</button>
+    <button class="btn primary block big" data-act="print">${icon("print", 22)} Print my card</button>
+    <p class="fine center">Write numbers in the empty boxes. Circle printed words or distances.</p>
+    <button class="link-btn" data-act="print-zoom">${S.printZoom ? "Fit preview to screen" : "Enlarge preview"}</button>
+    <div class="card-preview ${S.printZoom ? "enlarged" : ""}" aria-label="Preview of the printed card"><style>${cardCSS}</style><div class="card-scale">${sheetHTML({ course, detailed: S.printType === "detailed" })}</div></div>
+    <section class="group card-instructions"><h2>How to use your card</h2><ol><li><b>Cut</b> along the outside border.</li><li><b>Fold</b> on the middle dashed line with printing facing out.</li><li><b>Write</b> score, putts and penalties. <b>Circle</b> the tee-shot result and first-putt distance.</li><li><b>Flip</b> the card for holes 10–18.</li></ol></section>
     ${note("In the print dialog choose US Letter, landscape, and 100% scale (turn off \u201Cfit to page\u201D). Flat card: 10.4 in wide, folding to 5.2 in.")}
-    <section class="group prose"><h2>No printer?</h2><p>Use the course\u2019s own scorecard. Use four rows for each hole: score, putts, fairway (a tick for hit, \u2190 or \u2192 for a miss, and a P for each penalty stroke), and the first-putt letter A\u2013E. Pick \u201CCourse scorecard\u201D when you photograph it.</p></section></div>`;
+    <section class="group prose"><h2>No printer needed</h2><p>The course’s own scorecard works too.</p><a class="btn block" href="#/course-card-guide">Show me how to mark a course scorecard</a></section></div>`;
 };
 AFTER.print = () => {
   const box = document.querySelector(".card-preview"), inner = box?.querySelector(".card-scale");
   if (!inner) return;
   const sheet = inner.firstElementChild;
-  const scale = (box.clientWidth - 20) / sheet.offsetWidth;
+  const scale = S.printZoom ? 1 : Math.min(1, (box.clientWidth - 20) / sheet.offsetWidth);
   inner.style.transform = `scale(${scale})`;
   inner.style.width = sheet.offsetWidth + "px";
   box.style.height = Math.ceil(sheet.offsetHeight * scale + 20) + "px";
@@ -2492,10 +2551,13 @@ PAGES.backup = () => {
 };
 PAGES.new = () => {
   const d = data.draft;
-  return `<div class="page flow">${flowTop("Record a round", "")}
+  return `<div class="page flow">${flowTop("Add a finished round", "")}
     ${d && holesPlayed(d).some((h) => h.score !== "") ? `<div class="resume"><div><b>Unfinished round</b><small>${esc2(d.course || "Course not set")}</small></div><button class="btn small primary" data-act="resume">Resume</button></div>` : ""}
-    <button class="choice" data-act="start-scan">${icon("camera", 28)}<span><b>Photograph a scorecard</b><small>An Attest card or the course\u2019s own card. You check every reading before saving.</small></span></button>
-    <button class="choice" data-act="start-manual">${icon("pencil", 28)}<span><b>Enter hole by hole</b><small>Works offline. Takes about two minutes.</small></span></button>
+    <p class="lead">Which scorecard did you use?</p>
+    <button class="choice" data-act="start-scan">${icon("print",28)}<span><b>Attest printed card</b><small>The pocket card with printed choices to circle</small></span></button>
+    <button class="choice" data-act="course-card-photo">${icon("camera",28)}<span><b>Course’s own scorecard</b><small>The card supplied by the golf course, marked with the same stats.</small></span></button>
+    <a class="course-help-link" href="#/course-card-guide">How should I mark the course’s scorecard?</a>
+    <button class="choice" data-act="start-manual">${icon("pencil", 28)}<span><b>Enter scores myself</b><small>Works offline. Takes about two minutes.</small></span></button>
   </div>`;
 };
 function ensureDraft() {
@@ -2577,7 +2639,7 @@ PAGES.entry = () => {
     ${par ? "" : `<section class="entry-sec"><h2>Par</h2>${chips("par", [[3, "3"], [4, "4"], [5, "5"]])}</section>`}
     <section class="entry-sec"><h2>Score <small>including penalties</small></h2>${chips("score", scoreItems, "score-chips")}${h.score !== "" && h.score > (par ? par + 3 : 8) ? `<div class="stepper"><button class="chip" data-act="bump" data-f="score" data-v="-1" aria-label="One less">\u2212</button><button class="chip" data-act="bump" data-f="score" data-v="1" aria-label="One more">+</button></div>` : ""}</section>
     <section class="entry-sec"><h2>Putts <small>on the green only</small></h2>${chips("putts", [[0, "0"], [1, "1"], [2, "2"], [3, "3"], [4, "4+"]])}</section>
-    ${par === 3 ? "" : `<section class="entry-sec"><h2>Tee shot</h2>${chips("fairway", [["L", "\u2190 Left"], ["H", "Fairway"], ["R", "Right \u2192"]])}</section>`}
+    ${par === 3 ? "" : `<section class="entry-sec"><h2>Tee shot</h2>${chips("fairway", [["H", "Hit fairway"], ["L", "Left"], ["R", "Right"], ["S", "Short"], ["LG", "Long"]])}</section>`}
     <section class="entry-sec"><h2>Penalty strokes</h2>${chips("penalties", [[0, "0"], [1, "1"], [2, "2"], [3, "3"]])}</section>
     <section class="entry-sec"><h2>First putt length</h2>${chips("puttZone", ["A", "B", "C", "D", "E"].map((z) => [z, z, ZONE_LABEL[z]]), "zone-chips")}</section>
     <section class="entry-sec gir"><h2>Green in regulation <span class="est">est.</span></h2>
@@ -2596,34 +2658,35 @@ PAGES.scan = () => {
   const kind = S.scanKind;
   const course = kind === "course";
   return `<div class="page flow">${flowTop(course ? "Photograph course card" : "Photograph your card", course ? "course" : "new", "Back")}
-    ${course ? "" : `<section class="group"><h2>Which card?</h2><div class="seg three" role="group">${[["basic", "Attest card"], ["detailed", "Detailed card"], ["course-score", "Course card"]].map(([v, l]) => `<button class="${kind === v ? "on" : ""}" data-act="scan-kind" data-v="${v}" aria-pressed="${kind === v}">${l}</button>`).join("")}</div>
-      ${kind === "course-score" ? '<p class="fine">For a course\u2019s own card with four rows per hole: score, putts, fairway (\u2713, \u2190 or \u2192, plus a P per penalty), and first-putt letter.</p>' : ""}</section>`}
+    ${course ? "" : `<section class="group"><h2>What kind of scorecard is this?</h2><div class="seg three scan-card-types" role="group" aria-label="Scorecard type">${[["basic", "Attest card"], ["detailed", "Detailed card"], ["course-score", "Course’s own scorecard"]].map(([v, l]) => `<button class="${kind === v ? "on" : ""}" data-act="scan-kind" data-v="${v}" aria-pressed="${kind === v}">${l}</button>`).join("")}</div>
+      ${kind === "course-score" ? `<p>Upload the card you marked on paper: scores, putts, tee shots, penalties and first-putt distance. Missing details stay empty.</p><details class="course-guide-inline"><summary>Show the marking key and example</summary>${courseScorecardInstructions()}</details>` : ""}</section>`}
     ${course ? `<section class="group"><label class="field"><span>Which tees did you play?</span><input data-bind="scan-tee" value="${esc2(S.scanTee || "")}" placeholder="e.g. White"></label><p class="fine">The AI reads printed par, yards for that tee row, and stroke index. You\u2019ll check them next.</p></section>` : ""}
     <section class="group"><h2>Photo</h2>
       <p class="fine">Lay the card flat and unfolded in good light. Fill the frame, avoid shadows, hold the phone level.</p>
-      <div class="btn-row"><label class="btn file-btn">${icon("camera", 20)} Take photo<input type="file" accept="image/*" capture="environment" data-bind="photo"></label><label class="btn file-btn">Choose photo<input type="file" accept="image/*" data-bind="photo"></label></div>
+      <div class="btn-row"><label class="btn file-btn">${icon("camera", 20)} ${S.photoUrl ? "Retake photo" : "Take a photo"}<input type="file" accept="image/*" capture="environment" data-bind="photo"></label><label class="btn file-btn">Choose a photo<input type="file" accept="image/*" data-bind="photo"></label></div>
       ${S.photoUrl ? `<img class="scan-preview" src="${S.photoUrl}" alt="Your scorecard photo">` : ""}
     </section>
+    ${S.scanError ? `<section class="group errors" role="alert"><h2>The card could not be read</h2><p>${esc2(S.scanError)}</p><p>Try again, retake the photo, or choose <b>Enter scores myself</b> below.</p></section>` : ""}
     ${MOCK ? note("Mock mode: the reading will be simulated, not done by an AI model.", "warn") : ""}
     ${!navigator.onLine ? note("You\u2019re offline. Reading needs internet \u2014 you can still enter the round by hand with this photo for reference.", "warn") : ""}
     <div class="flow-bar">
-      <button class="btn primary block" data-act="read-card" ${!S.prepared || S.scanBusy ? "disabled" : ""}>${S.scanBusy ? "Reading both nines\u2026" : "Read card"}</button>
-      ${course ? "" : '<button class="btn block" data-act="photo-manual">Enter by hand instead</button>'}
-      <p class="fine center">Photos are sent to the AI service only when you tap Read card.</p>
+      <button class="btn primary block" data-act="read-card" ${!S.prepared || S.scanBusy ? "disabled" : ""}>${S.scanBusy ? "Reading your card…" : "Read my card"}</button>
+      ${course ? "" : '<button class="btn block" data-act="photo-manual">Enter scores myself</button>'}
+      <p class="fine center">Photos are sent to the AI service only when you tap Read my card.</p>
     </div></div>`;
 };
 var SCAN_FIELDS = {
-  basic: [["score", "Score", "num"], ["putts", "Putts", "num"], ["fairway", "Fwy", ["", "H", "L", "R", "NA"]], ["penalties", "Pen", "num"], ["puttZone", "1st", ["", "A", "B", "C", "D", "E"]]],
-  detailed: [["score", "Score", "num"], ["putts", "Putts", "num"], ["fairway", "Fwy", ["", "H", "L", "R", "NA"]], ["penalties", "Pen", "num"], ["puttZone", "1st", ["", "A", "B", "C", "D", "E"]], ["approach", "Appr", ["", "S", "LG", "L", "R"]], ["strike", "Contact", ["", "Solid", "Fat", "Thin"]], ["shortMiss", "Short", ["", "true", "false"]]],
+  basic: [["score", "Score", "num"], ["putts", "Putts", "num"], ["fairway", "Fwy", ["", "H", "L", "R", "S", "LG", "NA"]], ["penalties", "Pen", "num"], ["puttZone", "1st", ["", "A", "B", "C", "D", "E"]]],
+  detailed: [["score", "Score", "num"], ["putts", "Putts", "num"], ["fairway", "Fwy", ["", "H", "L", "R", "S", "LG", "NA"]], ["penalties", "Pen", "num"], ["puttZone", "1st", ["", "A", "B", "C", "D", "E"]], ["approach", "Appr", ["", "S", "LG", "L", "R"]], ["strike", "Contact", ["", "Solid", "Fat", "Thin"]], ["shortMiss", "Short", ["", "true", "false"]]],
   course: [["par", "Par", "num"], ["yardage", "Yards", "num"], ["handicap", "Index", "num"]]
 };
 SCAN_FIELDS["course-score"] = SCAN_FIELDS.basic;
-var OPT_LABEL = { H: "Hit", L: "\u2190 L", R: "R \u2192", NA: "\u2014", S: "Short", LG: "Long", true: "Yes", false: "No", Solid: "Solid", Fat: "Fat", Thin: "Thin" };
+var OPT_LABEL = { A: "Under 3 ft", B: "3–6 ft", C: "6–15 ft", D: "15–30 ft", E: "30+ ft", H: "Hit fairway", L: "\u2190 L", R: "R \u2192", NA: "\u2014", S: "Short", LG: "Long", true: "Yes", false: "No", Solid: "Solid", Fat: "Fat", Thin: "Thin" };
 var STATUS_TEXT = { uncertain: "unsure", unclear: "unreadable", conflict: "doesn\u2019t add up", invalid: "not valid", missing: "not returned" };
 PAGES["scan-review"] = () => {
   const sc = S.scan;
   if (!sc) return `<div class="page flow">${flowTop("Check the reading", "scan", "Back")}<p>No reading yet.</p></div>`;
-  const fields = SCAN_FIELDS[sc.kind];
+  const fields = SCAN_FIELDS[sc.kind].filter(([f]) => sc.kind !== "course-score" || ["score", "putts"].includes(f) || sc.holes.some(h => h.values[f] != null || ["uncertain", "unclear", "conflict", "invalid", "missing"].includes(h.status[f])));
   const count = sc.kind === "course" ? 18 : data.draft?.count || 18;
   const byHole = new Map(sc.holes.map((h) => [h.hole, h]));
   let flagged = 0;
@@ -2646,6 +2709,7 @@ PAGES["scan-review"] = () => {
     ${Object.entries(sc.errors || {}).map(([half, msg]) => note(`<b>${half === "front" ? "Holes 1\u20139" : "Holes 10\u201318"} weren\u2019t read:</b> ${esc2(msg)} Fill them in below or after.`, "warn")).join("")}
     ${sc.warnings.filter((w) => !/^Mocked/.test(w)).map((w) => note(esc2(w), "warn")).join("")}
     ${S.photoUrl ? `<details class="group photo-box" open><summary>Your photo</summary><img src="${S.photoUrl}" alt="Your scorecard photo"></details>` : ""}
+    ${sc.kind === "course-score" ? note("You only need to check the details you recorded. Unused tracking rows stay empty; they are not counted as zero.") : ""}
     <p class="lead">${flagged ? `<b>${plural2(flagged, "box", "boxes")}</b> need a look (outlined). Check every hole against the photo anyway.` : "Nothing was flagged, but check every hole against the photo."} Empty means nothing was written.</p>
     <div class="tbl-wrap"><table class="tbl scan-tbl"><thead><tr><th>Hole</th>${fields.map(([, l]) => `<th>${l}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>
     <p class="fine">Outlined: unsure, unreadable, doesn\u2019t add up (e.g. more putts than strokes allow), or not returned. Fixing a box clears its outline.</p>
@@ -2726,6 +2790,18 @@ ACT["start-manual"] = () => {
 ACT["start-scan"] = () => {
   if (!startFresh()) return;
   S.scanKind = pref.get("cardType", "basic");
+  S.scanError = "";
+  go("scan");
+};
+ACT["paper-ready"] = () => {
+  pref.set("onboarded",true);
+  go("");
+  toast("Use your paper card. Add the finished round when you’re done.");
+};
+ACT["course-card-photo"] = () => {
+  if (!startFresh()) return;
+  S.scanKind = "course-score";
+  S.scanError = "";
   go("scan");
 };
 ACT["scan-kind"] = (el) => {
@@ -2934,6 +3010,7 @@ async function onPhoto(file) {
   try {
     S.prepared = await prepareImage(file);
     S.photoUrl = S.prepared.full;
+    S.scanError = "";
     render();
   } catch (e) {
     toast(e.message, "error");
@@ -2946,6 +3023,7 @@ function savePhotoToDraft() {
 ACT["read-card"] = async () => {
   if (!S.prepared) return toast("Take or choose a photo first.", "error");
   S.scanBusy = true;
+  S.scanError = "";
   render();
   try {
     const res = await readCard(S.scanKind, S.prepared, { accessCode: pref.get("accessCode", ""), tee: S.scanTee || "" });
@@ -2958,6 +3036,7 @@ ACT["read-card"] = async () => {
     go("scan-review");
   } catch (e) {
     S.scanBusy = false;
+    S.scanError = e.message;
     render();
     toast(e.message, "error");
   }
@@ -3031,6 +3110,8 @@ ACT.theme = (el) => {
   applyTheme();
   render();
 };
+ACT["print-zoom"] = () => { const y=window.scrollY; S.printZoom=!S.printZoom;render();window.scrollTo(0,y); };
+window.addEventListener("resize",()=>{if(route().name==="print") AFTER.print();});
 ACT["print-type"] = (el) => {
   S.printType = el.dataset.v;
   pref.set("cardType", el.dataset.v);

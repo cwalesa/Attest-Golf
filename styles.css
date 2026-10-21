@@ -333,3 +333,51 @@ body.in-flow .toast { bottom: calc(env(safe-area-inset-bottom) + 96px); }
   #view, #tabs, .toast { display: none !important; }
   #print-root { display: block; }
 }
+
+/* 2.2 visual polish, preserving the existing pages and navigation. */
+:root{--radius:18px;--radius-s:12px;--line:#dce4dc;--green:#235b42;--green-soft:#e5eee7}
+body{background:radial-gradient(ellipse at 50% 0%,var(--green-soft) 0,transparent 500px),var(--paper)}
+.wordmark{text-transform:uppercase;letter-spacing:.16em;font-size:12px;font-weight:800;color:var(--green)}
+.page-head h1{letter-spacing:-.04em}.page-head .lead{max-width:46ch}
+.group{box-shadow:0 4px 18px #10291a05}.btn.primary{box-shadow:0 3px 8px #1d5a3e16;font-weight:700}
+.kpis{gap:12px}.kpi{border:1px solid var(--line);border-radius:16px;background:var(--surface);padding:18px}
+.coach{border-left:4px solid var(--green)}.coach-title{letter-spacing:-.025em}
+.choice{transition:border-color .15s,background .15s}.choice:hover{border-color:var(--green);background:var(--green-soft)}
+.seg{padding:5px;gap:4px}.seg button{min-height:44px}.seg .on{box-shadow:0 2px 7px #14201a10}
+.card-instructions ol{padding-left:24px}.card-instructions li{margin:12px 0}
+.card-preview{margin-top:12px;box-shadow:0 8px 30px #14201a0a;border-radius:12px}
+.card-preview.enlarged{overflow:auto;max-height:72vh}.card-scale{transform-origin:top left}
+.print-intro{border-left:3px solid var(--green);padding-left:14px}
+.drill{border:1px solid var(--line);box-shadow:0 4px 16px #14201a05;border-radius:18px;overflow:hidden}
+.drill-head{border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:16px}
+.drill-min{border:1px solid var(--line);background:var(--green-soft);color:var(--green);font-weight:800;border-radius:12px}
+.drill-head small{text-transform:uppercase;letter-spacing:.09em;font-size:11px;font-weight:750;color:var(--muted)}
+.session-summary{margin-top:20px;padding-top:18px;border-top:1px solid var(--line)}
+.session-summary>b{font-size:13px;color:var(--green);text-transform:uppercase;letter-spacing:.06em}
+.session-summary h2{font-size:21px;margin:8px 0}.session-summary p{color:var(--muted);font-size:15px}
+.session-timeline{display:flex;gap:4px;margin:16px 0 6px}.session-timeline span{background:var(--green-soft);color:var(--green);text-align:center;border-radius:6px;padding:8px 0;font-size:12px;font-weight:700}
+.btn,.nav-back,.chip{min-height:44px}input,select,textarea{font-size:16px}
+a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid var(--green);outline-offset:3px}
+@media(max-width:430px){.seg[aria-label="Card type"]{flex-wrap:wrap}.seg[aria-label="Card type"] button{flex:1 1 150px}.drill-head{gap:12px}.session-summary h2{font-size:20px}.zone-chips .chip{min-width:55px}}
+@media print{body{background:#fff}}
+
+/* Course scorecard: a visible alternative, with simple optional directions. */
+.course-card-link{align-items:center;color:var(--ink);text-decoration:none;margin:16px 0 22px}
+.course-card-link>span{flex:1}.course-card-link>.ic:last-child{flex:0 0 20px}
+.course-help-link{display:flex;align-items:center;min-height:48px;margin:-4px 0 16px;font-weight:600}
+.plain-steps{padding-left:24px}.plain-steps li{margin:14px 0;padding-left:4px}
+.card-example{width:100%;min-width:0;margin-top:12px}.card-example th:first-child{width:40%;text-align:left}.card-example td{font-weight:750;font-size:18px;color:var(--green)}
+.example-label{font-size:13px;font-weight:700;color:var(--muted)}
+.optional-tracking>summary,.course-guide-inline>summary{padding:12px 0;min-height:48px;cursor:pointer;font-weight:700;line-height:1.4}
+.tee-key{padding-left:20px}.tee-key li{margin:8px 0}.tee-key b{display:inline-block;min-width:28px}
+.course-card-guide>.btn{margin-top:12px}.course-guide-inline{margin-top:12px}
+.course-guide-inline .lead{font-size:17px}.scan-card-types{flex-wrap:wrap}.scan-card-types button{flex:1 1 135px;white-space:normal;min-height:48px;padding:10px}
+.course-card-guide{padding-bottom:40px}.course-guide-inline .group{padding:14px}
+
+/* Pre-round paper key; no live round tracking or phone prompts. */
+.paper-key-row{display:grid;grid-template-columns:82px 1fr;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.paper-key-row>span{line-height:1.5}.putt-distance-key{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin:16px 0}
+.putt-distance-key>div{padding:10px 3px;text-align:center;background:var(--green-soft);border-radius:9px;color:var(--green)}
+.putt-distance-key b{display:block;font-size:23px;margin-bottom:5px}.putt-distance-key span{display:block;font-size:12px;font-weight:650;line-height:1.35}
+.paper-promise{border-left:4px solid var(--green);padding:12px 16px;background:var(--green-soft);border-radius:0 10px 10px 0;margin:20px 0}
+@media(max-width:350px){.paper-key-row{grid-template-columns:68px 1fr;gap:8px}.putt-distance-key span{font-size:11px}}
