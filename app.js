@@ -51,7 +51,7 @@ function blankHole() {
 function zoneFromFeet(ft) {
   const v = num(ft);
   if (v === null || v < 0) return "";
-  return v < 3 ? "A" : v < 6 ? "B" : v < 15 ? "C" : v < 30 ? "D" : "E";
+  return v < 3 ? "A" : v <= 6 ? "B" : v <= 15 ? "C" : v <= 30 ? "D" : "E";
 }
 function normalizeHole(h) {
   const src = h && typeof h === "object" ? h : {};
@@ -1546,9 +1546,12 @@ function planRestore(current, text) {
   };
 }
 async function applyRestore(current, plan) {
-  current.rounds.push(...plan.newRounds.map(normalizeRound));
-  current.courses.push(...plan.newCourses);
-  current.practices.push(...plan.newPractices);
+  const haveRounds = new Set(current.rounds.map((r) => r.id));
+  const haveCourses = new Set(current.courses.map((c) => courseKey(c.name, c.tees, c.teeGender)));
+  const havePractices = new Set(current.practices.map((p) => p.id));
+  current.rounds.push(...plan.newRounds.filter((r) => !haveRounds.has(r.id)).map(normalizeRound));
+  current.courses.push(...plan.newCourses.filter((c) => !haveCourses.has(courseKey(c.name, c.tees, c.teeGender))));
+  current.practices.push(...plan.newPractices.filter((p) => !havePractices.has(p.id)));
   if (!current.profile.name && plan.profile?.name) current.profile = { ...current.profile, ...plan.profile };
   let restoredPhotos = 0;
   for (const [id, v] of plan.photos) {
@@ -2077,7 +2080,7 @@ function splitBar(parts) {
 }
 
 // js/app.js
-var VERSION = "2.4.3";
+var VERSION = "2.4.4";
 var params2 = new URLSearchParams(location.search);
 var DEMO = params2.get("demo") === "1";
 var data;
@@ -2199,6 +2202,7 @@ function renderOnboarding() {
       <li><b>Mark five things on paper:</b> score, putts, tee-shot result, penalties and first-putt distance. Your phone stays put away.</li>
       <li><b>Photograph the card</b> after the round. You check every reading before anything is saved.</li>
     </ol>
+    ${bootNote ? note(esc2(bootNote), "warn") : ""}
     <button class="btn primary block" data-act="onboard-done">Get started</button>
     <a class="btn block" href="?demo=1">Look around with a demo golfer</a>
     <p class="fine">Your rounds stay on this phone. Export a backup from time to time \u2014 there\u2019s no cloud account.</p>
@@ -2962,8 +2966,17 @@ ACT["gir-fix"] = (el) => {
 };
 ACT["save-round"] = async () => {
   const d = data.draft;
+  if (!d || S.saving) return;
   const v = validateRound(d);
   if (v.errors.length) return toast(v.errors[0], "error");
+  S.saving = true;
+  try {
+    await saveRoundNow(d);
+  } finally {
+    S.saving = false;
+  }
+};
+async function saveRoundNow(d) {
   holesPlayed(d).forEach((h) => {
     const g = girInfo(h);
     h.gir = g.value || "";
@@ -2979,20 +2992,30 @@ ACT["save-round"] = async () => {
     }
   }
   const i = data.rounds.findIndex((x) => x.id === r.id);
+  const before = i >= 0 ? data.rounds[i] : null;
+  const coursesBefore = data.courses.slice();
   if (i >= 0) data.rounds[i] = r;
   else data.rounds.push(r);
   upsertCourse(roundToCourse(r));
+  const draftBefore = data.draft;
   data.draft = null;
+  if (!persist()) {
+    // The phone would not store it. Put everything back so the golfer can retry or back up.
+    if (i >= 0) data.rounds[i] = before;
+    else data.rounds = data.rounds.filter((x) => x.id !== r.id);
+    data.courses = coursesBefore;
+    data.draft = draftBefore;
+    render();
+    return;
+  }
   S.photoUrl = "";
   S.scan = null;
   S.prepared = null;
   S.backPhotoUrl = "";
-  if (persist()) {
-    toast(i >= 0 ? "Round updated" : "Round saved");
-    requestPersistence();
-  }
+  toast(i >= 0 ? "Round updated" : "Round saved");
+  requestPersistence();
   go(`round/${encodeURIComponent(r.id)}`, true);
-};
+}
 ACT["edit-round"] = (el) => {
   const r = data.rounds.find((x) => x.id === el.dataset.id);
   if (!r) return;
@@ -3182,9 +3205,16 @@ ACT["export-safety"] = async () => {
 };
 ACT["apply-restore"] = async () => {
   const plan = S.restorePlan;
-  const n = await applyRestore(data, plan);
-  persist();
+  if (!plan || S.restoring) return;
+  S.restoring = true;
   S.restorePlan = null;
+  let n = 0;
+  try {
+    n = await applyRestore(data, plan);
+  } finally {
+    S.restoring = false;
+  }
+  persist();
   toast(`Added ${plural2(plan.newRounds.length, "round")}${n ? ` and ${plural2(n, "photo")}` : ""}`);
   render();
 };

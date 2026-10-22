@@ -1,5 +1,6 @@
-const CACHE = 'attest-golf-v2.4.3';
-const ASSETS = ['./index.html', './app.js?v=2.4.3', './styles.css?v=2.4.3', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
+const CACHE = 'attest-golf-v2.4.4';
+const ASSETS = ['./index.html', './app.js?v=2.4.4', './styles.css?v=2.4.4', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
+self.addEventListener('message', (event) => { if (event.data === 'SKIP_WAITING') self.skipWaiting(); });
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
 });
