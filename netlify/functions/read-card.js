@@ -139,6 +139,20 @@ function normCell(field, raw, kind) {
   return { value, status: uncertain ? 'uncertain' : 'read' };
 }
 
+// The model is told to return direction and penalties separately, but golfers write "R P" or
+// "S P P" in one box and the model sometimes copies that into the tee field. Split it here so the
+// direction and penalty count are not thrown away. Each P is one penalty stroke.
+const TEE_WITH_P = /^(HIT|LEFT|RIGHT|SHORT|LONG|LG|SH|NA|H|L|R|S|\u2014|-|\u2713|\u2190|\u2192)?\s*((?:P\s*)+)(\?)?$/;
+function splitTeeAndPenalty(rawFairway) {
+  const s = String(rawFairway ?? '').trim().toUpperCase().replace(/\s+/g, ' ');
+  const m = TEE_WITH_P.exec(s);
+  if (!m) return null;
+  const pens = (m[2].match(/P/g) || []).length;
+  if (pens < 1 || pens > 6) return null;
+  const dir = m[1] ? m[1] + (m[3] ? '?' : '') : '';
+  return { dir, pens };
+}
+
 function normalize(kind, holes, parsed) {
   const fields = FIELD_SETS[kind];
   const byHole = new Map();
@@ -148,11 +162,20 @@ function normalize(kind, holes, parsed) {
   const out = holes.map((n) => {
     const src = byHole.get(n);
     const values = {}, status = {};
+    // Pull penalties out of a combined tee box ("R P") when the model did not separate them.
+    let teeRaw = src ? src.fairway : undefined, penRaw = src ? src.penalties : undefined, splitPens = null;
+    if (src && fields.includes('fairway') && fields.includes('penalties')) {
+      const sp = splitTeeAndPenalty(src.fairway);
+      if (sp) { teeRaw = sp.dir; splitPens = sp.pens; if (String(penRaw ?? '').trim() === '') penRaw = String(sp.pens); }
+    }
     for (const f of fields) {
       const name = OUT_NAME[f] || f;
-      const c = src ? normCell(f, src[f], kind) : { value: null, status: 'missing' };
+      const raw = f === 'fairway' ? teeRaw : f === 'penalties' ? penRaw : src ? src[f] : undefined;
+      const c = src ? normCell(f, raw, kind) : { value: null, status: 'missing' };
       values[name] = c.value; status[name] = c.status;
     }
+    // If the combined box and the separate penalty box disagree, keep the box value but ask for a check.
+    if (splitPens !== null && values.penalties !== null && values.penalties !== splitPens) status.penalties = 'uncertain';
     // Cross-checks: flag, never fix.
     if (values.score != null && values.putts != null && values.putts > values.score - 1) { status.putts = 'conflict'; status.score = status.score === 'read' ? 'conflict' : status.score; }
     if (values.score != null && values.penalties != null && values.putts != null && values.putts + values.penalties > values.score - 1) status.penalties = 'conflict';
