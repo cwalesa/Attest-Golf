@@ -40,7 +40,7 @@ function limited(ip) {
 
 function originAllowed(event) {
   const origin = event.headers?.origin || event.headers?.Origin || '';
-  if (!origin) return true; // same-origin GET/POST from some browsers omits it; access code covers scripts
+  if (!origin) return Boolean(process.env.SCAN_ACCESS_CODE); // requests without Origin require the configured access code
   const list = (process.env.ALLOWED_ORIGINS || [process.env.URL, process.env.DEPLOY_PRIME_URL, process.env.DEPLOY_URL].filter(Boolean).join(','))
     .split(',').map((s) => s.trim().replace(/\/$/, '')).filter(Boolean);
   if (!list.length) return true;
@@ -71,21 +71,24 @@ Fields: par (3–6), yards (integer), hcp (1–18).`;
   }
   if (kind === 'course-score') {
     return `This photo shows an ordinary golf-course scorecard that the golfer annotated by hand for ${range}.
-Expected rows the golfer wrote (check that this matches what you see; if it does not, add a warning and return "?" rather than forcing it):
-1st handwritten row = SCORE (number). 2nd = PUTTS (number). 3rd = FAIRWAY: a check/tick means hit → "H", a left arrow or L → "L", a right arrow or R → "R", dash on par 3 → "NA". Each letter P written in that box is one penalty stroke → report the count in "penalties" ("0" if the fairway box has a mark but no P; "" if the box is empty). 4th = FIRST-PUTT ZONE letter A–E.
+Use handwritten ROW LABELS first: SCORE (or SCORE plus the golfer's name), PUTTS, TEE + PEN (or FAIRWAY), 1ST PUTT (normally a letter A-E). The normal tracking layout uses all four rows to capture all five stats. Some golfers may have omitted rows; preserve those blanks. Omitted rows must return empty strings, not guessed values or zeroes. Do not read a different player's scores as this golfer's extra tracking rows. If multiple unlabelled players could be the subject, add a warning and return "?" rather than choosing one.
+For legacy cards without labels, use the old four-row mapping only when the marks clearly match: score, putts, fairway plus penalties, first-putt zone. Otherwise warn rather than forcing a mapping.
+SCORE = total strokes including penalties. PUTTS = strokes on the green only.
+TEE + PEN: H/HIT or check/tick means hit -> "H"; L/LEFT or left arrow -> "L"; R/RIGHT or right arrow -> "R"; S/SHORT -> "S"; LG/LONG -> "LG"; a dash on a par 3 -> "NA". A dash without Ps means zero penalties. Each P is one penalty stroke: "R P" means fairway R and penalties 1; "S P P" means fairway S and penalties 2; "H" alone means H and penalties 0. Ps without a direction still count as penalties; leave fairway empty. A wholly empty box means both are empty, not zero.
+1ST PUTT: normally the golfer writes one zone letter A-E: A under 3 ft, B 3-6 ft, C over 6-15 ft, D over 15-30 ft, E over 30 ft. Return that letter. Also support earlier cards explicitly labelled 1ST PUTT (FT): report the handwritten distance in FEET as a number string (e.g. "18"), not a made-up measurement. Return "?" if units are unclear or if the row could be someone else's scores. Leave empty when not recorded.
 Printed par, yardage and handicap rows are not scores.${common}
-Fields: score, putts, fairway (H|L|R|NA), penalties, zone (A–E).`;
+Fields: score, putts, fairway (H|L|R|S|LG|NA), penalties, zone (distance in feet as a string OR legacy A–E).`;
   }
   const det = kind === 'detailed';
-  return `This photo shows an Attest Golf ${det ? 'DETAILED' : 'POCKET'} card (layout code AG-${det ? 'D' : 'B'}2 near the top left). Hole numbers are the column headings. Read ${range}.
-Rows: SCORE (handwritten number), PUTTS (handwritten number), FAIRWAY (printed letters H L R — report the ONE the golfer circled; a printed "—" means par 3 → "NA"), PENALTY (handwritten number), 1ST PUTT (printed A B C D E — report the ONE circled)${det ? ', APPROACH (printed SH LG LT RT — report the circled one), CONTACT (printed SOL FAT THN — report the circled one), SHORT MISS (printed Y N — report the circled one)' : ''}.
-Letters are printed without circles; only a pencil circle, tick, slash or fill around/through a letter counts as a choice. If two choices are marked, or a mark sits between letters, return "?".${common}
-Fields: score, putts, fairway (H|L|R|NA), penalties, zone (A–E)${det ? ', approach (SH|LG|LT|RT), contact (SOL|FAT|THN), shortMiss (Y|N)' : ''}.`;
+  return `This photo shows an Attest Golf ${det ? 'DETAILED' : 'POCKET'} card (layout code AG-${det ? 'D' : 'B'}3 or legacy AG-${det ? 'D' : 'B'}2 near the top left). Hole numbers are the column headings. Read ${range}.
+Rows: SCORE (handwritten number), PUTTS (handwritten number), TEE SHOT or FAIRWAY (new cards print HIT LEFT RIGHT SHORT LONG: return H L R S LG respectively for the ONE marked word; older cards print H L R. A printed "—" means par 3 → "NA"), PENALTY (handwritten number), 1ST PUTT (new cards print A: <3, B: 3–6, C: 6–15, D: 15–30, E: 30+; return the letter for the ONE marked distance. Older cards print just A B C D E)${det ? ', APPROACH (printed SHORT LONG LEFT RIGHT or legacy SH LG LT RT: return SH LG LT RT), CONTACT (printed SOLID FAT THIN or legacy SOL FAT THN: return SOL FAT THN), SHORT PUTT or SHORT MISS (printed YES NO or Y N: return Y N)' : ''}.
+Words, letters and distances are printed without circles; only a golfer’s pencil circle, tick, slash or fill counts as a choice. Never report all printed options as selected. If two choices are marked, or a mark sits between options, return "?". SHORT/LONG in the TEE SHOT row describe stopping before or going beyond the fairway landing area; do not confuse them with the separate APPROACH row.${common}
+Fields: score, putts, fairway (H|L|R|S|LG|NA), penalties, zone (A–E)${det ? ', approach (SH|LG|LT|RT), contact (SOL|FAT|THN), shortMiss (Y|N)' : ''}.`;
 }
 
 function schemaFor(kind, holes) {
   const fields = FIELD_SETS[kind];
-  const cellProps = Object.fromEntries(fields.map((f) => [f, { type: 'string' }]));
+  const cellProps = Object.fromEntries(fields.map((f) => [f, { type: 'string', ...(f === 'fairway' ? { description: 'Tee-shot result: H, L, R, S (short), LG (long), or NA. Accept S/SHORT and LG/LONG. Return the direction separately from penalties; each P belongs in the penalties field. Use an empty string for blank, ? for unclear, or a trailing ? for uncertainty.' } : {}) }]));
   return {
     type: 'object', additionalProperties: false,
     properties: {
@@ -102,7 +105,7 @@ function schemaFor(kind, holes) {
 
 // ---------- normalisation: every cell validated, nothing invented ----------
 const MAP = {
-  fairway: { H: 'H', HIT: 'H', '✓': 'H', L: 'L', '←': 'L', LEFT: 'L', R: 'R', '→': 'R', RIGHT: 'R', NA: 'NA', '—': 'NA', '-': 'NA' },
+  fairway: { H: 'H', HIT: 'H', '✓': 'H', L: 'L', '←': 'L', LEFT: 'L', R: 'R', '→': 'R', RIGHT: 'R', S: 'S', SH: 'S', SHORT: 'S', LG: 'LG', LONG: 'LG', NA: 'NA', '—': 'NA', '-': 'NA' },
   zone: { A: 'A', B: 'B', C: 'C', D: 'D', E: 'E' },
   approach: { SH: 'S', S: 'S', SHORT: 'S', LG: 'LG', LONG: 'LG', LT: 'L', LEFT: 'L', RT: 'R', RIGHT: 'R' },
   contact: { SOL: 'Solid', SOLID: 'Solid', FAT: 'Fat', THN: 'Thin', THIN: 'Thin' },
@@ -111,14 +114,18 @@ const MAP = {
 const RANGE = { score: [1, 15], putts: [0, 6], penalties: [0, 6], par: [3, 6], yards: [40, 750], hcp: [1, 18] };
 const OUT_NAME = { zone: 'puttZone', contact: 'strike', yards: 'yardage', hcp: 'handicap' };
 
-function normCell(field, raw) {
+function normCell(field, raw, kind) {
   const s = String(raw ?? '').trim();
   if (s === '') return { value: null, status: 'blank' };
   if (s === '?') return { value: null, status: 'unclear' };
   const uncertain = s.endsWith('?');
   const core = s.replace(/\?+$/, '').trim().toUpperCase();
   let value;
-  if (RANGE[field]) {
+  if (field === 'zone' && kind === 'course-score' && /^\d{1,3}(?:\.\d)?$/.test(core)) {
+    const feet = Number(core);
+    if (feet <= 0 || feet > 300) return { value: null, status: 'invalid', raw: s };
+    value = feet < 3 ? 'A' : feet <= 6 ? 'B' : feet <= 15 ? 'C' : feet <= 30 ? 'D' : 'E';
+  } else if (RANGE[field]) {
     if (!/^\d{1,3}$/.test(core)) return { value: null, status: 'invalid', raw: s };
     value = Number(core);
     const [lo, hi] = RANGE[field];
@@ -141,7 +148,7 @@ function normalize(kind, holes, parsed) {
     const values = {}, status = {};
     for (const f of fields) {
       const name = OUT_NAME[f] || f;
-      const c = src ? normCell(f, src[f]) : { value: null, status: 'missing' };
+      const c = src ? normCell(f, src[f], kind) : { value: null, status: 'missing' };
       values[name] = c.value; status[name] = c.status;
     }
     // Cross-checks: flag, never fix.
