@@ -5,8 +5,10 @@
 // shows the result on a review screen and saves only after the golfer confirms.
 //
 // Environment variables
-//   OPENAI_API_KEY        (or)  ANTHROPIC_API_KEY
-//   VISION_PROVIDER       optional: "openai" | "anthropic" (auto if only one key)
+//   GEMINI_API_KEY        (or) OPENAI_API_KEY (or) ANTHROPIC_API_KEY
+//   VISION_PROVIDER       optional: "gemini" | "openai" | "anthropic"
+//   GEMINI_VISION_MODEL   optional, default gemini-3.5-flash-lite
+//                         Set VISION_PROVIDER=gemini to prevent paid fallback.
 //   OPENAI_VISION_MODEL   optional, default gpt-4.1-mini
 //   ANTHROPIC_VISION_MODEL optional, default claude-haiku-5-5
 //   SCAN_ACCESS_CODE      optional shared code; if set, requests must send it
@@ -200,10 +202,38 @@ async function callAnthropic(prompt, schema, image, signal) {
   return tool.input;
 }
 
+async function callGemini(prompt, schema, image, signal) {
+  const m = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(image);
+  const model = (process.env.GEMINI_VISION_MODEL || 'gemini-3.5-flash-lite').replace(/^models\//, '');
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+    method: 'POST', signal,
+    headers: { 'x-goog-api-key': process.env.GEMINI_API_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: prompt }, { inlineData: { mimeType: m[1], data: m[2] } }] }],
+      generationConfig: { responseFormat: { text: { mimeType: 'APPLICATION_JSON', schema } }, maxOutputTokens: 4096 },
+    }),
+  });
+  if (!res.ok) {
+    // Google can report an invalid API key as HTTP 400 rather than 401.
+    let detail;
+    try { detail = await res.json(); } catch {}
+    const invalidKey = (detail?.error?.details || []).some((d) => d.reason === 'API_KEY_INVALID');
+    throw Object.assign(new Error(`provider ${res.status}`), { status: invalidKey ? 401 : res.status });
+  }
+  const out = await res.json();
+  const candidate = out.candidates?.[0];
+  if (candidate?.finishReason && candidate.finishReason !== 'STOP') throw new Error('incomplete output');
+  const raw = (candidate?.content?.parts || []).filter((part) => !part.thought && typeof part.text === 'string').map((part) => part.text).join('');
+  if (!raw) throw new Error('empty output');
+  return JSON.parse(raw);
+}
+
 function provider() {
   const want = (process.env.VISION_PROVIDER || '').toLowerCase();
+  if (want === 'gemini') return process.env.GEMINI_API_KEY ? 'gemini' : null;
   if (want === 'anthropic' && process.env.ANTHROPIC_API_KEY) return 'anthropic';
   if (want === 'openai' && process.env.OPENAI_API_KEY) return 'openai';
+  if (process.env.GEMINI_API_KEY) return 'gemini';
   if (process.env.OPENAI_API_KEY) return 'openai';
   if (process.env.ANTHROPIC_API_KEY) return 'anthropic';
   return null;
@@ -234,7 +264,7 @@ exports.handler = async (event) => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), Number(process.env.SCAN_TIMEOUT_MS || 9000));
   try {
-    const parsed = p === 'openai' ? await callOpenAI(prompt, schema, image, controller.signal) : await callAnthropic(prompt, schema, image, controller.signal);
+    const parsed = p === 'gemini' ? await callGemini(prompt, schema, image, controller.signal) : p === 'openai' ? await callOpenAI(prompt, schema, image, controller.signal) : await callAnthropic(prompt, schema, image, controller.signal);
     const result = normalize(kind, holes, parsed);
     return reply(200, { ...result, kind, half, provider: p, requiresReview: true });
   } catch (e) {
