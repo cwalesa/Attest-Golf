@@ -53,7 +53,7 @@ function originAllowed(event) {
 const FIELD_SETS = {
   basic: ['score', 'putts', 'fairway', 'penalties', 'zone'],
   detailed: ['score', 'putts', 'fairway', 'penalties', 'zone', 'approach', 'contact', 'shortMiss'],
-  'course-score': ['score', 'putts', 'fairway', 'penalties', 'zone'],
+  'course-score': ['score', 'putts', 'fairway', 'penalties', 'zone', 'approach'],
   course: ['par', 'yards', 'hcp'],
 };
 
@@ -73,13 +73,14 @@ Fields: par (3–6), yards (integer), hcp (1–18).`;
   }
   if (kind === 'course-score') {
     return `This photo shows an ordinary golf-course scorecard that the golfer annotated by hand for ${range}.
-Use handwritten ROW LABELS first: SCORE (or SCORE plus the golfer's name), PUTTS, TEE + PEN (or FAIRWAY), 1ST PUTT (normally a letter A-E). The normal tracking layout uses all four rows to capture all five stats. Some golfers may have omitted rows; preserve those blanks. Omitted rows must return empty strings, not guessed values or zeroes. Do not read a different player's scores as this golfer's extra tracking rows. If multiple unlabelled players could be the subject, add a warning and return "?" rather than choosing one.
-For legacy cards without labels, use the old four-row mapping only when the marks clearly match: score, putts, fairway plus penalties, first-putt zone. Otherwise warn rather than forcing a mapping.
+Use handwritten ROW LABELS first. The recommended order, top to bottom, is SCORE (or SCORE plus the golfer's name), TEE + PEN (or FAIRWAY), APPROACH (also written APP or APPR), 1ST PUTT (normally a letter A-E), PUTTS, but identify every row by its label, not its position, because golfers may use a different order. APPROACH is an optional row. Some golfers may have omitted rows; preserve those blanks. Omitted rows must return empty strings, not guessed values or zeroes. Do not read a different player's scores as this golfer's extra tracking rows. If multiple unlabelled players could be the subject, add a warning and return "?" rather than choosing one.
+For legacy cards without labels, use the old four-row mapping only when the marks clearly match, in this order: score, putts, fairway plus penalties, first-putt zone. Never read APPROACH on a card without labels. Otherwise warn rather than forcing a mapping.
 SCORE = total strokes including penalties. PUTTS = strokes on the green only.
-TEE + PEN: H/HIT or check/tick means hit -> "H"; L/LEFT or left arrow -> "L"; R/RIGHT or right arrow -> "R"; S/SHORT -> "S"; LG/LONG -> "LG"; a dash on a par 3 -> "NA". A dash without Ps means zero penalties. Each P is one penalty stroke: "R P" means fairway R and penalties 1; "S P P" means fairway S and penalties 2; "H" alone means H and penalties 0. Ps without a direction still count as penalties; leave fairway empty. A wholly empty box means both are empty, not zero.
+TEE + PEN: H/HIT or check/tick means hit -> "H"; L/LEFT or left arrow -> "L"; R/RIGHT or right arrow -> "R"; S/SHORT -> "S"; LG/LONG -> "LG"; a dash on a par 3 -> "NA". A dash without Ps means zero penalties. Each P is one penalty stroke: "R P" means fairway R and penalties 1; "S P P" means fairway S and penalties 2; "H" alone means H and penalties 0. Ps without a direction still count as penalties; leave fairway empty. A wholly empty box means both are empty, not zero. In the penalties field count ONLY the Ps written in the TEE + PEN box; Ps written in the APPROACH box are counted separately by the app, so do not add them here.
 1ST PUTT: normally the golfer writes one zone letter A-E: A under 3 ft, B 3-6 ft, C over 6-15 ft, D over 15-30 ft, E over 30 ft. Return that letter. Also support earlier cards explicitly labelled 1ST PUTT (FT): report the handwritten distance in FEET as a number string (e.g. "18"), not a made-up measurement. Return "?" if units are unclear or if the row could be someone else's scores. Leave empty when not recorded.
+APPROACH: the golfer writes a code only when the approach shot missed the green: S (short), LG (long), L (left), R (right). Each P written in the box is one penalty stroke on the approach, for example \"S P\" is a short miss with one penalty and a lone \"P\" is a penalty with no direction. Return the APPROACH box exactly as written, Ps included (\"S P\", \"LG P P\", \"P\"). A blank APPROACH box means the green was hit or the row was not used, so return an empty string, never a guess. If there is no APPROACH row at all, return empty strings for every hole. Read APPROACH only from the row with that label; do not copy letters from the TEE + PEN row, whose S and LG mean something different.
 Printed par, yardage and handicap rows are not scores.${common}
-Fields: score, putts, fairway (H|L|R|S|LG|NA), penalties, zone (distance in feet as a string OR legacy A–E).`;
+Fields: score, putts, fairway (H|L|R|S|LG|NA), penalties, zone (distance in feet as a string OR legacy A–E), approach (S|LG|L|R, each followed by a P for every penalty stroke, e.g. \"S P\").`;
   }
   const det = kind === 'detailed';
   return `This photo shows an Attest Golf ${det ? 'DETAILED' : 'POCKET'} card (layout code AG-${det ? 'D' : 'B'}3 or legacy AG-${det ? 'D' : 'B'}2 near the top left). Hole numbers are the column headings. Read ${range}.
@@ -109,7 +110,7 @@ function schemaFor(kind, holes) {
 const MAP = {
   fairway: { H: 'H', HIT: 'H', '✓': 'H', L: 'L', '←': 'L', LEFT: 'L', R: 'R', '→': 'R', RIGHT: 'R', S: 'S', SH: 'S', SHORT: 'S', LG: 'LG', LONG: 'LG', NA: 'NA', '—': 'NA', '-': 'NA' },
   zone: { A: 'A', B: 'B', C: 'C', D: 'D', E: 'E' },
-  approach: { SH: 'S', S: 'S', SHORT: 'S', LG: 'LG', LONG: 'LG', LT: 'L', LEFT: 'L', RT: 'R', RIGHT: 'R' },
+  approach: { SH: 'S', S: 'S', SHORT: 'S', LG: 'LG', LONG: 'LG', LT: 'L', L: 'L', LEFT: 'L', RT: 'R', R: 'R', RIGHT: 'R' },
   contact: { SOL: 'Solid', SOLID: 'Solid', FAT: 'Fat', THN: 'Thin', THIN: 'Thin' },
   shortMiss: { Y: true, YES: true, N: false, NO: false },
 };
@@ -153,12 +154,25 @@ function splitTeeAndPenalty(rawFairway) {
   return { dir, pens };
 }
 
+// Course cards: the approach box can carry penalty Ps too ("S P", "LG P P", or just "P").
+const APPROACH_WITH_P = /^(SHORT|LONG|LEFT|RIGHT|LG|SH|LT|RT|S|L|R)?\s*((?:P\s*)*)(\?)?$/;
+function splitApproachAndPenalty(rawApproach) {
+  const s = String(rawApproach ?? '').trim().toUpperCase().replace(/\s+/g, ' ');
+  if (s === '' || s === '?') return null;
+  const m = APPROACH_WITH_P.exec(s);
+  if (!m) return null;
+  const pens = (m[2].match(/P/g) || []).length;
+  if (pens < 1 || pens > 6) return null;
+  return { dir: m[1] ? m[1] + (m[3] ? '?' : '') : '', pens };
+}
+
 function normalize(kind, holes, parsed) {
   const fields = FIELD_SETS[kind];
   const byHole = new Map();
   for (const h of Array.isArray(parsed?.holes) ? parsed.holes : []) {
     if (Number.isInteger(h?.hole) && holes.includes(h.hole) && !byHole.has(h.hole)) byHole.set(h.hole, h);
   }
+  let approachPenaltyNote = false;
   const out = holes.map((n) => {
     const src = byHole.get(n);
     const values = {}, status = {};
@@ -168,20 +182,36 @@ function normalize(kind, holes, parsed) {
       const sp = splitTeeAndPenalty(src.fairway);
       if (sp) { teeRaw = sp.dir; splitPens = sp.pens; if (String(penRaw ?? '').trim() === '') penRaw = String(sp.pens); }
     }
+    // Course cards only: pull penalty Ps out of the approach box.
+    let appRaw = src ? src.approach : undefined, appPens = null;
+    if (src && kind === 'course-score' && fields.includes('approach')) {
+      const ap = splitApproachAndPenalty(src.approach);
+      if (ap) { appRaw = ap.dir; appPens = ap.pens; }
+    }
     for (const f of fields) {
       const name = OUT_NAME[f] || f;
-      const raw = f === 'fairway' ? teeRaw : f === 'penalties' ? penRaw : src ? src[f] : undefined;
+      const raw = f === 'fairway' ? teeRaw : f === 'penalties' ? penRaw : f === 'approach' ? appRaw : src ? src[f] : undefined;
       const c = src ? normCell(f, raw, kind) : { value: null, status: 'missing' };
       values[name] = c.value; status[name] = c.status;
     }
     // If the combined box and the separate penalty box disagree, keep the box value but ask for a check.
     if (splitPens !== null && values.penalties !== null && values.penalties !== splitPens) status.penalties = 'uncertain';
+    // Total penalties = Ps in the tee box + Ps in the approach box.
+    if (appPens !== null) {
+      const total = (values.penalties ?? 0) + appPens;
+      if (total <= RANGE.penalties[1]) {
+        values.penalties = total;
+        if (['blank', 'read', 'missing'].includes(status.penalties)) status.penalties = 'read';
+        approachPenaltyNote = true;
+      } else { values.penalties = null; status.penalties = 'invalid'; }
+    }
     // Cross-checks: flag, never fix.
     if (values.score != null && values.putts != null && values.putts > values.score - 1) { status.putts = 'conflict'; status.score = status.score === 'read' ? 'conflict' : status.score; }
     if (values.score != null && values.penalties != null && values.putts != null && values.putts + values.penalties > values.score - 1) status.penalties = 'conflict';
     return { hole: n, values, status };
   });
   const warnings = (Array.isArray(parsed?.warnings) ? parsed.warnings : []).filter((w) => typeof w === 'string').slice(0, 6).map((w) => w.slice(0, 200));
+  if (approachPenaltyNote) warnings.push('Penalty strokes written in the APPROACH row were added to the Pen column.');
   if (parsed && parsed.layoutMatches === false) warnings.unshift('The photo may not match the selected card layout. Check the layout choice and every value.');
   return { holes: out, warnings };
 }
