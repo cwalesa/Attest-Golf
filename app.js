@@ -506,7 +506,7 @@ function findIssues(rounds) {
       impact: s.lost.per18.threePutt,
       title: lag ? "Long putts are turning into three-putts" : "Cut out three-putts",
       evidence: `${plural(three, "three-putt")} in ${plural(s.putting.n, "hole")} with putts recorded \u2014 ${f1(s.lost.per18.threePutt)} extra putts per 18.${zoneTxt}`,
-      advice: lag ? "The problem is distance on the first putt, not holing out. Practise speed from 25\u201345 ft until most finish inside a 3-ft circle." : "Your three-putts start from mid-range, so the second putt is the leak. Practise 3\u20136 ft putts under a little pressure.",
+      advice: lag ? "The problem is distance on the first putt, not holing out. Practice speed from 25\u201345 ft until most finish inside a 3-ft circle." : "Your three-putts start from mid-range, so the second putt is the leak. Practice 3\u20136 ft putts under a little pressure.",
       confidence: conf(s.putting.n)
     });
   }
@@ -563,14 +563,14 @@ function findIssues(rounds) {
     focus: `driving-${fb.side}`,
     title: `Tee shots miss ${fb.side}`,
     evidence: `${fb.count} of your ${fb.of} left/right fairway misses went ${fb.side} (${pc(fb.count / fb.of)}).`,
-    advice: `Practise starting the ball on your intended line and choose targets that give a ${fb.side} miss more room. This is a pattern in results, not a diagnosis of your swing.`
+    advice: `Practice starting the ball on your intended line and choose targets that give a ${fb.side} miss more room. This is a pattern in results, not a diagnosis of your swing.`
   });
   if (s.fairways.n >= 14 && s.fairways.pct !== null && s.fairways.pct < 0.4 && !fb) patterns.push({
     key: "driving",
     focus: "driving",
     title: "Fairways are hard to come by",
     evidence: `${s.fairways.hit} of ${s.fairways.n} fairways hit (${pc(s.fairways.pct)}), misses: ${s.fairways.left} left / ${s.fairways.right} right / ${s.fairways.short} short / ${s.fairways.long} long.`,
-    advice: s.fairways.short + s.fairways.long > s.fairways.left + s.fairways.right ? "Check the distance to the fairway landing area. Choose a tee club that reaches it without running through it." : "Practise a reliable tee shot and a narrower target corridor."
+    advice: s.fairways.short + s.fairways.long > s.fairways.left + s.fairways.right ? "Check the distance to the fairway landing area. Choose a tee club that reaches it without running through it." : "Practice a reliable tee shot and a narrower target corridor."
   });
   if (s.detailed.approachN >= 10) {
     const a = s.detailed.approach;
@@ -1005,7 +1005,7 @@ var DRILLS = [
     steps: "Play each: tee shot to a corridor, then the approach club the result leaves. Full routine, one ball each.",
     reps: "9 holes, about 20 balls",
     target: "6 of 9 tee shots in play; 4 of 9 approaches on the \u201Cgreen\u201D",
-    why: "Practises decisions and routine, not just mechanics."
+    why: "Practices decisions and routine, not just mechanics."
   },
   {
     id: "par-18",
@@ -2080,7 +2080,7 @@ function splitBar(parts) {
 }
 
 // js/app.js
-var VERSION = "2.4.4";
+var VERSION = "2.4.5";
 var params2 = new URLSearchParams(location.search);
 var DEMO = params2.get("demo") === "1";
 var data;
@@ -2258,7 +2258,7 @@ function coachingCard(c, { full = false } = {}) {
     ${rec && rec.of >= 3 ? `<p class="recur ${rec.recurring ? "yes" : ""}">${rec.recurring ? `Recurring: showed up in ${rec.hits} of your last ${rec.of} rounds.` : `Showed up in ${rec.hits} of your last ${rec.of} rounds.`}</p>` : ""}
     <p class="advice">${esc2(p.advice)}</p>
     <p class="fine">Based on ${c.holes} holes from your last ${plural2(c.window, "round")}. ${p.confidence ? esc2(p.confidence.label) + " evidence." : ""}</p>
-    <a class="btn" href="#/practice" data-act="practice-focus" data-focus="${esc2(p.focus)}">Practise this</a>
+    <a class="btn" href="#/practice" data-act="practice-focus" data-focus="${esc2(p.focus)}">Practice this</a>
     ${full && c.issues.length > 1 ? `<details class="others"><summary>Other things the numbers show</summary>${c.issues.slice(1).map((i) => `<div class="other"><b>${esc2(i.title)}</b><p>${esc2(i.evidence)}</p></div>`).join("")}${c.patterns.map((i) => `<div class="other"><b>${esc2(i.title)}</b><p>${esc2(i.evidence)} ${esc2(i.advice)}</p></div>`).join("")}</details>` : ""}
     ${!full && c.patterns.length ? `<p class="pattern"><b>Also:</b> ${esc2(c.patterns[0].evidence)}</p>` : ""}
   </section>`;
