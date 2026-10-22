@@ -1674,9 +1674,9 @@ function mockScan(kind, half) {
     })
   };
 }
-async function readCard(kind, prepared, { accessCode = "", tee = "" } = {}) {
+async function readCard(kind, prepared, { accessCode = "", tee = "", backImage = "" } = {}) {
   const halves = ["front", "back"];
-  const run = (half) => MOCK ? new Promise((r) => setTimeout(() => r(kind === "course" ? mockCourseCard(half) : mockScan(kind, half)), 700)) : call("read-card", { body: { image: prepared[half], kind, half, tee }, headers: accessCode ? { "x-attest-code": accessCode } : {}, timeout: 25e3 });
+  const run = (half) => MOCK ? new Promise((r) => setTimeout(() => r(kind === "course" ? mockCourseCard(half) : mockScan(kind, half)), 700)) : call("read-card", { body: { image: backImage ? (half === "front" ? prepared.full : backImage) : kind === "course-score" ? prepared.full : prepared[half], kind, half, tee }, headers: accessCode ? { "x-attest-code": accessCode } : {}, timeout: 25e3 });
   const results = await Promise.allSettled(halves.map(run));
   const out = { holes: [], warnings: [], errors: {}, mock: MOCK, provider: "" };
   results.forEach((r, i) => {
@@ -2077,7 +2077,7 @@ function splitBar(parts) {
 }
 
 // js/app.js
-var VERSION = "2.4.1";
+var VERSION = "2.4.2";
 var params2 = new URLSearchParams(location.search);
 var DEMO = params2.get("demo") === "1";
 var data;
@@ -2093,6 +2093,7 @@ var S = {
   scan: null,
   scanKind: pref.get("cardType", "basic"),
   prepared: null,
+  backPhotoUrl: "",
   photoUrl: "",
   scanBusy: false,
   scanError: "",
@@ -2574,6 +2575,7 @@ function startFresh() {
   S.photoUrl = "";
   S.scan = null;
   S.prepared = null;
+  S.backPhotoUrl = "";
   S.hole = 0;
   ensureDraft();
   persist();
@@ -2661,11 +2663,17 @@ PAGES.scan = () => {
     ${course ? "" : `<section class="group"><h2>What kind of scorecard is this?</h2><div class="seg three scan-card-types" role="group" aria-label="Scorecard type">${[["basic", "Attest card"], ["detailed", "Detailed card"], ["course-score", "Course’s own scorecard"]].map(([v, l]) => `<button class="${kind === v ? "on" : ""}" data-act="scan-kind" data-v="${v}" aria-pressed="${kind === v}">${l}</button>`).join("")}</div>
       ${kind === "course-score" ? `<p>Upload the card you marked on paper: scores, putts, tee shots, penalties and first-putt distance. Missing details stay empty.</p><details class="course-guide-inline"><summary>Show the marking key and example</summary>${courseScorecardInstructions()}</details>` : ""}</section>`}
     ${course ? `<section class="group"><label class="field"><span>Which tees did you play?</span><input data-bind="scan-tee" value="${esc2(S.scanTee || "")}" placeholder="e.g. White"></label><p class="fine">The AI reads printed par, yards for that tee row, and stroke index. You\u2019ll check them next.</p></section>` : ""}
-    <section class="group"><h2>Photo</h2>
+    <section class="group"><h2>${S.backPhotoUrl ? "Photo 1: holes 1–9" : "Photo"}</h2>
       <p class="fine">Lay the card flat and unfolded in good light. Fill the frame, avoid shadows, hold the phone level.</p>
       <div class="btn-row"><label class="btn file-btn">${icon("camera", 20)} ${S.photoUrl ? "Retake photo" : "Take a photo"}<input type="file" accept="image/*" capture="environment" data-bind="photo"></label><label class="btn file-btn">Choose a photo<input type="file" accept="image/*" data-bind="photo"></label></div>
       ${S.photoUrl ? `<img class="scan-preview" src="${S.photoUrl}" alt="Your scorecard photo">` : ""}
     </section>
+    ${kind === "course-score" || course ? `<section class="group"><h2>Holes on both sides?</h2>
+      <p class="fine">If holes 10–18 are on the back, use the first photo for holes 1–9 and add the back below. If all 18 holes are in one photo, leave this empty. Use a separate card for each golfer.</p>
+      <label class="btn block file-btn">${S.backPhotoUrl ? "Replace back photo" : "Add photo of holes 10–18"}<input type="file" accept="image/*" data-bind="photo-back"></label>
+      ${S.backPhotoUrl ? `<img class="scan-preview" src="${S.backPhotoUrl}" alt="Back of scorecard: holes 10–18"><button class="link-btn" data-act="remove-back-photo">Remove back photo</button>` : ""}
+      <p class="fine">Keep both original photos in your phone’s Photos app. The saved round’s photo reference keeps the first image.</p>
+    </section>` : ""}
     ${S.scanError ? `<section class="group errors" role="alert"><h2>The card could not be read</h2><p>${esc2(S.scanError)}</p><p>Try again, retake the photo, or choose <b>Enter scores myself</b> below.</p></section>` : ""}
     ${MOCK ? note("Mock mode: the reading will be simulated, not done by an AI model.", "warn") : ""}
     ${!navigator.onLine ? note("You\u2019re offline. Reading needs internet \u2014 you can still enter the round by hand with this photo for reference.", "warn") : ""}
@@ -2708,7 +2716,7 @@ PAGES["scan-review"] = () => {
     ${sc.mock ? note("<b>Mocked reading.</b> These values are simulated for testing and were not read from your photo.", "warn") : ""}
     ${Object.entries(sc.errors || {}).map(([half, msg]) => note(`<b>${half === "front" ? "Holes 1\u20139" : "Holes 10\u201318"} weren\u2019t read:</b> ${esc2(msg)} Fill them in below or after.`, "warn")).join("")}
     ${sc.warnings.filter((w) => !/^Mocked/.test(w)).map((w) => note(esc2(w), "warn")).join("")}
-    ${S.photoUrl ? `<details class="group photo-box" open><summary>Your photo</summary><img src="${S.photoUrl}" alt="Your scorecard photo"></details>` : ""}
+    ${S.photoUrl ? `<details class="group photo-box" open><summary>Your photo</summary><img src="${S.photoUrl}" alt="Your scorecard photo">${S.backPhotoUrl ? `<img src="${S.backPhotoUrl}" alt="Back of scorecard: holes 10–18">` : ""}</details>` : ""}
     ${sc.kind === "course-score" ? note("You only need to check the details you recorded. Unused tracking rows stay empty; they are not counted as zero.") : ""}
     <p class="lead">${flagged ? `<b>${plural2(flagged, "box", "boxes")}</b> need a look (outlined). Check every hole against the photo anyway.` : "Nothing was flagged, but check every hole against the photo."} Empty means nothing was written.</p>
     <div class="tbl-wrap"><table class="tbl scan-tbl"><thead><tr><th>Hole</th>${fields.map(([, l]) => `<th>${l}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>
@@ -2806,12 +2814,14 @@ ACT["course-card-photo"] = () => {
 };
 ACT["scan-kind"] = (el) => {
   S.scanKind = el.dataset.v;
+  S.backPhotoUrl = "";
   if (data.draft) data.draft.tracking = el.dataset.v === "detailed" ? "detailed" : data.draft.tracking;
   render();
 };
 ACT["scan-course-card"] = () => {
   S.scanKind = "course";
   S.prepared = null;
+  S.backPhotoUrl = "";
   go("scan");
 };
 ACT["manual-course"] = () => go("course-confirm");
@@ -2976,6 +2986,7 @@ ACT["save-round"] = async () => {
   S.photoUrl = "";
   S.scan = null;
   S.prepared = null;
+  S.backPhotoUrl = "";
   if (persist()) {
     toast(i >= 0 ? "Round updated" : "Round saved");
     requestPersistence();
@@ -3006,6 +3017,15 @@ ACT["delete-round"] = (el) => {
   toast("Round deleted");
   go("rounds", true);
 };
+ACT["remove-back-photo"] = () => { S.backPhotoUrl = ""; render(); };
+async function onBackPhoto(file) {
+  try {
+    const prepared = await prepareImage(file);
+    S.backPhotoUrl = prepared.full;
+    S.scanError = "";
+    render();
+  } catch (e) { toast(e.message, "error"); }
+}
 async function onPhoto(file) {
   try {
     S.prepared = await prepareImage(file);
@@ -3026,7 +3046,7 @@ ACT["read-card"] = async () => {
   S.scanError = "";
   render();
   try {
-    const res = await readCard(S.scanKind, S.prepared, { accessCode: pref.get("accessCode", ""), tee: S.scanTee || "" });
+    const res = await readCard(S.scanKind, S.prepared, { accessCode: pref.get("accessCode", ""), tee: S.scanTee || "", backImage: S.backPhotoUrl });
     S.scan = { ...res, kind: S.scanKind };
     S.scan.holes.forEach((h) => {
       h.touched = {};
@@ -3215,6 +3235,10 @@ document.addEventListener("change", async (e) => {
   if (!b) return;
   if (b === "photo") {
     if (t.files[0]) await onPhoto(t.files[0]);
+    t.value = "";
+  }
+  if (b === "photo-back") {
+    if (t.files[0]) await onBackPhoto(t.files[0]);
     t.value = "";
   }
   if (b === "restore-file") {
