@@ -269,7 +269,7 @@ exports.handler = async (event) => {
   const p = provider();
   if (!p) return reply(503, { error: 'AI scanning is not set up on this site yet. Enter the card manually.', code: 'not_configured' });
   const code = process.env.SCAN_ACCESS_CODE;
-  if (code && (event.headers?.['x-attest-code'] || '') !== code) return reply(401, { error: 'Scanning needs the access code. Add it in More → AI scanning.', code: 'access_code' });
+  if (code && (event.headers?.['x-attest-code'] || '') !== code) return reply(401, { error: 'Scanning is restricted on this site.', code: 'access_code' });
   if ((event.body || '').length > MAX_BODY) return reply(413, { error: 'Photo too large. The app should shrink it automatically — try again.' });
   const ip = String(event.headers?.['x-nf-client-connection-ip'] || event.headers?.['x-forwarded-for'] || 'unknown').split(',')[0].trim();
   const lim = limited(ip);
