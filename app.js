@@ -1677,9 +1677,9 @@ function mockScan(kind, half) {
     })
   };
 }
-async function readCard(kind, prepared, { accessCode = "", tee = "", backImage = "" } = {}) {
+async function readCard(kind, prepared, { tee = "", backImage = "" } = {}) {
   const halves = ["front", "back"];
-  const run = (half) => MOCK ? new Promise((r) => setTimeout(() => r(kind === "course" ? mockCourseCard(half) : mockScan(kind, half)), 700)) : call("read-card", { body: { image: backImage ? (half === "front" ? prepared.full : backImage) : kind === "course-score" ? prepared.full : prepared[half], kind, half, tee }, headers: accessCode ? { "x-attest-code": accessCode } : {}, timeout: 25e3 });
+  const run = (half) => MOCK ? new Promise((r) => setTimeout(() => r(kind === "course" ? mockCourseCard(half) : mockScan(kind, half)), 700)) : call("read-card", { body: { image: backImage ? (half === "front" ? prepared.full : backImage) : kind === "course-score" ? prepared.full : prepared[half], kind, half, tee }, timeout: 25e3 });
   const results = await Promise.allSettled(halves.map(run));
   const out = { holes: [], warnings: [], errors: {}, mock: MOCK, provider: "" };
   results.forEach((r, i) => {
@@ -2080,7 +2080,7 @@ function splitBar(parts) {
 }
 
 // js/app.js
-var VERSION = "2.4.5";
+var VERSION = "2.4.7";
 var params2 = new URLSearchParams(location.search);
 var DEMO = params2.get("demo") === "1";
 var data;
@@ -2424,8 +2424,7 @@ PAGES.more = () => `<div class="page"><header class="page-head"><h1>More</h1></h
   </section>
   <section class="group"><h2>Appearance</h2><div class="seg" role="group" aria-label="Theme">${[["light", "Light"], ["dark", "Dark"], ["system", "Match phone"]].map(([v, l]) => `<button class="${pref.get("theme", "light") === v ? "on" : ""}" data-act="theme" data-v="${v}" aria-pressed="${pref.get("theme", "light") === v}">${l}</button>`).join("")}</div></section>
   <section class="group"><h2>AI scanning</h2>
-    <p class="fine">If whoever set up this site added an access code, enter it here. Photos are sent to the AI service only when you tap \u201CRead card\u201D.</p>
-    <label class="field"><span>Access code</span><input data-bind="access-code" value="${esc2(pref.get("accessCode", ""))}" autocomplete="off" autocapitalize="off"></label>
+    <p class="fine">Photos are sent to the AI service only when you tap \u201CRead card\u201D.</p>
   </section>
   <section class="group">${DEMO ? row("Leave the demo", "", "", "./") : row("Show the demo golfer", "", "Fictional rounds, kept separate from yours", "?demo=1")}${row("About and accuracy", "", `Version ${VERSION}`, "#/about")}</section></div>`;
 PAGES.about = () => `<div class="page">${backBtn("more", "More")}<header class="page-head"><h1>About and accuracy</h1></header>
@@ -2681,10 +2680,10 @@ PAGES.scan = () => {
     ${S.scanError ? `<section class="group errors" role="alert"><h2>The card could not be read</h2><p>${esc2(S.scanError)}</p><p>Try again, retake the photo, or choose <b>Enter scores myself</b> below.</p></section>` : ""}
     ${MOCK ? note("Mock mode: the reading will be simulated, not done by an AI model.", "warn") : ""}
     ${!navigator.onLine ? note("You\u2019re offline. Reading needs internet \u2014 you can still enter the round by hand with this photo for reference.", "warn") : ""}
-    <div class="flow-bar">
+    <p class="fine center scan-privacy">Photos are sent to the configured AI service only when you tap Read my card. If this site uses Gemini’s free tier, Google may use submitted content to improve its products. Avoid including other players’ personal details.</p>
+    <div class="flow-bar inline">
       <button class="btn primary block" data-act="read-card" ${!S.prepared || S.scanBusy ? "disabled" : ""}>${S.scanBusy ? "Reading your card…" : "Read my card"}</button>
       ${course ? "" : '<button class="btn block" data-act="photo-manual">Enter scores myself</button>'}
-      <p class="fine center">Photos are sent to the configured AI service only when you tap Read my card. If this site uses Gemini’s free tier, Google may use submitted content to improve its products. Avoid including other players’ personal details.</p>
     </div></div>`;
 };
 var SCAN_FIELDS = {
@@ -3069,7 +3068,7 @@ ACT["read-card"] = async () => {
   S.scanError = "";
   render();
   try {
-    const res = await readCard(S.scanKind, S.prepared, { accessCode: pref.get("accessCode", ""), tee: S.scanTee || "", backImage: S.backPhotoUrl });
+    const res = await readCard(S.scanKind, S.prepared, { tee: S.scanTee || "", backImage: S.backPhotoUrl });
     S.scan = { ...res, kind: S.scanKind };
     S.scan.holes.forEach((h) => {
       h.touched = {};
@@ -3304,10 +3303,6 @@ document.addEventListener("change", async (e) => {
   if (b === "profile-name") {
     data.profile.name = t.value.trim().slice(0, 50);
     persist();
-    toast("Saved");
-  }
-  if (b === "access-code") {
-    pref.set("accessCode", t.value.trim());
     toast("Saved");
   }
   if (b === "draft-date") {

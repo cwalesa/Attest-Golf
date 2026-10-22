@@ -426,3 +426,8 @@ body { font-size: 17px; line-height: 1.5; }
 #view > .page, #view > .flow { animation: pageIn .24s ease-out both; }
 @keyframes pageIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media print { .group, .choice, .kpis, .resume { box-shadow: none; border-color: #bbb; } #view > .page, #view > .flow { animation: none; } .page-head::after { display: none; } }
+
+/* Scan page: action bar sits in the page flow so it never covers content */
+.flow-bar.inline { position: sticky; left: auto; right: auto; bottom: 0; margin: 16px -16px 0; }
+body.in-flow #view:has(.flow-bar.inline) { padding-bottom: 0; }
+.scan-privacy { margin-top: 12px; }
