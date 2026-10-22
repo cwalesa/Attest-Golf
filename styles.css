@@ -431,3 +431,19 @@ body { font-size: 17px; line-height: 1.5; }
 .flow-bar.inline { position: sticky; left: auto; right: auto; bottom: 0; margin: 16px -16px 0; }
 body.in-flow #view:has(.flow-bar.inline) { padding-bottom: 0; }
 .scan-privacy { margin-top: 12px; }
+
+/* Course scorecard setup screen */
+.step-tag { margin: 0 0 2px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.row-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 56px; margin-top: 8px; padding: 10px 14px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.row-toggle small { display: block; margin-top: 2px; font-weight: 400; color: var(--muted); }
+.row-toggle .tick { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--line); display: flex; align-items: center; justify-content: center; font-style: normal; font-size: 15px; color: transparent; }
+.row-toggle[aria-checked="true"] { border-color: var(--green); background: var(--green-soft); }
+.row-toggle[aria-checked="true"] .tick { background: var(--green); border-color: var(--green); color: var(--green-ink); }
+.row-toggle.fixed { opacity: .8; cursor: default; }
+.label-list { list-style: none; counter-reset: lab; margin: 12px 0; padding: 0; }
+.label-list li { counter-increment: lab; display: flex; align-items: center; gap: 12px; margin-top: 8px; padding: 12px 14px; border: 1.5px dashed var(--line); border-radius: 10px; font-size: 19px; letter-spacing: .04em; }
+.label-list li::before { content: counter(lab); flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--green-soft); color: var(--green); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; letter-spacing: 0; }
+
+/* Logo placements */
+.brand-logo { display: block; width: min(220px, 62vw); height: auto; margin: 0 0 18px; border-radius: 28px; box-shadow: 0 8px 24px rgba(20, 40, 30, .12); }
+.about-icon { display: block; margin: 0 0 12px; border-radius: 16px; }

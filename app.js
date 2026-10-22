@@ -2080,7 +2080,7 @@ function splitBar(parts) {
 }
 
 // js/app.js
-var VERSION = "2.4.7";
+var VERSION = "2.5.0";
 var params2 = new URLSearchParams(location.search);
 var DEMO = params2.get("demo") === "1";
 var data;
@@ -2194,7 +2194,7 @@ function renderOnboarding() {
   document.body.classList.add("in-flow");
   $("#tabs").innerHTML = "";
   $("#view").innerHTML = `<div class="page onboarding">
-    <div class="brand-mark" aria-hidden="true">${icon("flag", 34)}</div>
+    <img class="brand-logo" src="./logo.png" width="220" height="220" alt="Attest Golf logo: a golf flag with a checkmark on it, planted in the cup">
     <h1>Attest Golf</h1>
     <p class="lead">Keep your phone in your bag. Mark a pocket card with a pencil as you play, photograph it afterwards, and see what to work on.</p>
     <ol class="steps">
@@ -2223,7 +2223,7 @@ PAGES.home = () => {
     if (since >= 3 || old && since > 0) out.push(`<a class="resume warn" href="#/backup"><div><b>Back up your rounds</b><small>${since} round${since === 1 ? "" : "s"} since your last backup. Safari can clear website data.</small></div>${icon("chevron", 18)}</a>`);
   }
   out.push(`<button class="btn primary block big" data-act="go" data-to="new">${icon("plus", 22)} Add a finished round</button>`);
-  out.push(`<a class="choice course-card-link" href="#/course-card-guide">${icon("pencil",26)}<span><b>Before you play: scorecard key</b><small>Use either paper card. Review the key, then put your phone away.</small></span>${icon("chevron",20)}</a>`);
+  out.push(`<a class="choice course-card-link" href="#/course-card-guide">${icon("pencil",26)}<span><b>Before you play: set up your scorecard</b><small>Choose what to track and get the labels to write on the card.</small></span>${icon("chevron",20)}</a>`);
   if (!data.rounds.length) {
     out.push(`<section class="group empty-state"><h2>No rounds yet</h2><p>Print an Attest card or use the course’s own scorecard. After playing, add a photo or type your scores.</p><div class="btn-row"><a class="btn" href="#/print">${icon("print", 20)} Print cards</a><a class="btn" href="?demo=1">See the demo</a></div></section></div>`);
     return out.join("");
@@ -2427,7 +2427,8 @@ PAGES.more = () => `<div class="page"><header class="page-head"><h1>More</h1></h
     <p class="fine">Photos are sent to the AI service only when you tap \u201CRead card\u201D.</p>
   </section>
   <section class="group">${DEMO ? row("Leave the demo", "", "", "./") : row("Show the demo golfer", "", "Fictional rounds, kept separate from yours", "?demo=1")}${row("About and accuracy", "", `Version ${VERSION}`, "#/about")}</section></div>`;
-PAGES.about = () => `<div class="page">${backBtn("more", "More")}<header class="page-head"><h1>About and accuracy</h1></header>
+PAGES.about = () => `<div class="page">${backBtn("more", "More")}<img class="about-icon" src="./icon-192.png" width="72" height="72" alt="">
+  <header class="page-head"><h1>About and accuracy</h1></header>
   <section class="group prose"><h2>What the numbers can and can\u2019t tell you</h2>
   <p>Everything is worked out from what you write on the card. Blank boxes are left out, never treated as zero, and every rate shows how many holes it\u2019s based on.</p>
   <p><b>Greens in regulation</b> are estimated from score minus putts. Penalty strokes count toward regulation, as they do officially. The estimate fails when a putt from the fringe is written down as a putt, or when you hole out from off the green. Those holes are flagged and left out unless you set GIR yourself.</p>
@@ -2448,31 +2449,62 @@ PAGES.handicap = () => {
     <section class="group prose"><h2>How it\u2019s calculated</h2><p>Each round: (113 \xF7 slope) \xD7 (adjusted gross \u2212 course rating). Hole scores are capped at net double bogey for the adjusted score only \u2014 your real score is never changed. The estimate averages your lowest differentials from the last 20, using the World Handicap System table.</p><ul>${NOTES.map((n) => `<li>${esc2(n)}</li>`).join("")}</ul></section></div>`;
 };
 
-function courseScorecardInstructions() {
-  return `<p class="lead">Keep the same stats on paper. Review this key before you play, put your phone away, and upload the card after the round.</p>
-    <section class="group"><h2>Your quick marking key</h2>
-      <div class="paper-key-row"><b>Score</b><span>Total strokes, including penalties.</span></div>
-      <div class="paper-key-row"><b>Putts</b><span>Strokes on the green only.</span></div>
-      <div class="paper-key-row"><b>Tee shot</b><span><b>H</b> hit · <b>L</b> left · <b>R</b> right · <b>S</b> short · <b>LG</b> long.</span></div>
-      <div class="paper-key-row"><b>Penalties</b><span>Add one <b>P</b> per penalty stroke in the tee-shot box. <b>R P</b> = right, one penalty. No P = no penalties when a tee result is recorded.</span></div>
-      <div class="paper-key-row"><b>First putt</b><span>Write one distance letter. Estimate the range; no measuring needed.</span></div>
-      <div class="putt-distance-key" aria-label="First-putt distance key"><div><b>A</b><span>Under 3 ft</span></div><div><b>B</b><span>3–6 ft</span></div><div><b>C</b><span>Over 6–15 ft</span></div><div><b>D</b><span>Over 15–30 ft</span></div><div><b>E</b><span>Over 30 ft</span></div></div>
-      <p class="fine">Short / long means before / beyond the fairway landing area. On a par 3, write a dash instead of a tee result; add any penalty Ps beside it. Leave first-putt distance blank if you did not putt. Leave anything you did not track empty.</p></section>
-    <section class="group"><h2>Using the course’s scorecard?</h2><p>Use four player rows for your own tracking. Write these labels in the player-name boxes before you tee off:</p>
-      <div class="tbl-wrap"><table class="tbl card-example"><caption class="sr">Four-row course scorecard example with all five stats</caption><thead><tr><th scope="col">Row label</th><th scope="col">Hole 1</th><th scope="col">Hole 2</th><th scope="col">Hole 3</th></tr></thead><tbody><tr><th scope="row">SCORE</th><td>5</td><td>4</td><td>6</td></tr><tr><th scope="row">PUTTS</th><td>2</td><td>1</td><td>2</td></tr><tr><th scope="row">TEE + PEN</th><td>H</td><td>R P</td><td>S P P</td></tr><tr><th scope="row">1ST PUTT</th><td>D</td><td>B</td><td>D</td></tr></tbody></table></div>
-      <p><b>After each hole:</b> write score and putts, then a tee code, any penalty Ps, and a putt-distance letter.</p><p class="fine">Add your name beside SCORE if others share the card. Use a separate course card if there are not enough spare rows for your stats.</p></section>
-    <details class="group"><summary>Using an Attest printed card?</summary><p>The rows and choices are already printed. Write score, putts and penalty strokes. Circle the tee-shot result and first-putt distance. Use the separate penalty row, rather than adding Ps to the tee result.</p><p>The Detailed card also has approach, contact and short-putt-miss choices.</p></details>
-    <p class="paper-promise"><b>No app use while you play.</b> Just your paper card and a pencil. After the round, choose <b>Add a finished round</b>, photograph your card and check the readings.</p>`;
+var COURSE_ROW_DEFS = [
+  { k: "tee", label: "TEE + PEN", name: "Tee shot and penalties", blurb: "Where the tee shot went, plus penalty strokes", rule: `<b>H</b> hit · <b>L</b> left · <b>R</b> right · <b>S</b> short · <b>LG</b> long. Add one <b>P</b> per penalty stroke (<b>R P</b> = right, one penalty). On a par 3, write a dash.`, ex: ["H", "R P", "H"] },
+  { k: "approach", label: "APPROACH", name: "Approach", blurb: "Where you miss the green", rule: `Only when you miss the green: <b>S</b> short · <b>LG</b> long · <b>L</b> left · <b>R</b> right. Add a <b>P</b> for each penalty stroke (<b>S P</b>). Leave it blank when you hit the green.`, ex: ["S", "", "L P"] },
+  { k: "firstPutt", label: "1ST PUTT", name: "First putt", blurb: "How far the first putt was", rule: `Write one distance letter, <b>A</b> to <b>E</b>. Estimate the range; no measuring needed. Leave it blank if you did not putt.`, ex: ["D", "B", "D"], key: true },
+  { k: "putts", label: "PUTTS", name: "Putts", blurb: "Strokes on the green", rule: `Strokes on the green only.`, ex: ["2", "1", "2"] }
+];
+var COURSE_ROW_DEFAULT = ["tee", "approach", "firstPutt", "putts"];
+function courseRowsSelected() {
+  const saved = pref.get("courseRows", COURSE_ROW_DEFAULT);
+  const list = Array.isArray(saved) ? saved : COURSE_ROW_DEFAULT;
+  return COURSE_ROW_DEFS.map((d) => d.k).filter((k) => list.includes(k));
 }
-PAGES["course-card-guide"] = () => `<div class="page flow course-card-guide">${flowTop("Before your round", "", "Close")}
-  ${courseScorecardInstructions()}
+ACT["course-row-toggle"] = (el) => {
+  const k = el.dataset.k, cur = courseRowsSelected();
+  const next = cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k];
+  pref.set("courseRows", next);
+  render();
+};
+function courseScorecardInstructions({ setup = false } = {}) {
+  const sel = courseRowsSelected();
+  const defs = COURSE_ROW_DEFS.filter((d) => sel.includes(d.k));
+  const rows = [{ label: "SCORE", name: "Score", rule: "Total strokes, including penalties.", ex: ["5", "4", "6"] }, ...defs];
+  const n = rows.length;
+  const keyRows = rows.map((r) => `<div class="paper-key-row"><b>${r.name}</b><span>${r.rule}</span></div>${r.key ? `<div class="putt-distance-key" aria-label="First-putt distance key"><div><b>A</b><span>Under 3 ft</span></div><div><b>B</b><span>3–6 ft</span></div><div><b>C</b><span>Over 6–15 ft</span></div><div><b>D</b><span>Over 15–30 ft</span></div><div><b>E</b><span>Over 30 ft</span></div></div>` : ""}`).join("");
+  const example = `<div class="tbl-wrap"><table class="tbl card-example"><caption class="sr">Example of a marked course scorecard, three holes</caption><thead><tr><th scope="col">Row label</th><th scope="col">Hole 1</th><th scope="col">Hole 2</th><th scope="col">Hole 3</th></tr></thead><tbody>${rows.map((r) => `<tr><th scope="row">${r.label}</th>${r.ex.map((v) => `<td>${v}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+  const toggles = `<button class="row-toggle fixed" role="switch" aria-checked="true" disabled><span><b>Score</b><small>Always tracked</small></span><i class="tick">✓</i></button>${COURSE_ROW_DEFS.map((d) => `<button class="row-toggle" role="switch" aria-checked="${sel.includes(d.k)}" data-act="course-row-toggle" data-k="${d.k}"><span><b>${d.name}</b><small>${d.blurb}</small></span><i class="tick">✓</i></button>`).join("")}`;
+  const labels = `<ol class="label-list" aria-label="Row labels, top to bottom">${rows.map((r) => `<li><b>${r.label}</b></li>`).join("")}</ol>`;
+  const afterHole = `<p><b>After each hole:</b> ${["write your score", sel.includes("tee") ? "the tee code, with a P for each penalty" : "", sel.includes("approach") ? "an approach code only if you missed the green (with a P for each penalty there too)" : "", sel.includes("firstPutt") ? "the first-putt letter" : "", sel.includes("putts") ? "your putts" : ""].filter(Boolean).join(", then ")}. Leave a box empty for anything you did not track.</p>`;
+  const shortLongNote = sel.includes("tee") || sel.includes("approach") ? `<p class="fine">${[sel.includes("tee") ? "On the tee shot, short / long means before / beyond the fairway landing area. On a par 3, write a dash instead of a tee result." : "", sel.includes("approach") ? "On the approach, short / long means short of / past the green." : ""].filter(Boolean).join(" ")}</p>` : "";
+  const printed = `<details class="group"><summary>Using an Attest printed card?</summary><p>The rows and choices are already printed. Write score, putts and penalty strokes. Circle the tee-shot result and first-putt distance. Use the separate penalty row, rather than adding Ps to the tee result.</p><p>The Detailed card also has approach, contact and short-putt-miss choices.</p></details>`;
+  const promise = `<p class="paper-promise"><b>No app use while you play.</b> Just your paper card and a pencil. After the round, choose <b>Add a finished round</b>, photograph your card and check the readings.</p>`;
+  if (!setup) {
+    return `<p class="lead">Your row labels, top to bottom: ${rows.map((r) => `<b>${r.label}</b>`).join(", ")}.</p>
+    <section class="group"><h2>Your quick marking key</h2>${keyRows}${shortLongNote}</section>
+    <section class="group"><h2>Example</h2>${example}${afterHole}</section>
+    <p class="fine"><a href="#/course-card-guide">Change which rows you track</a></p>`;
+  }
+  return `<p class="lead">Set up the course’s own scorecard before you tee off. Choose what you want to track, write the labels on the card, then play with just a pencil.</p>
+    <section class="group"><p class="step-tag">Step 1</p><h2>Choose what to track</h2>
+      <p class="fine">Every row you add needs a spare row on the card. Skip anything you do not want to write down.</p>${toggles}</section>
+    <section class="group"><p class="step-tag">Step 2</p><h2>Label your rows</h2>
+      <p>Write these in the player-name boxes, top to bottom, before the first tee. You need <b>${n} spare row${n === 1 ? "" : "s"}</b>${n > 4 ? " (if your card has fewer, switch a row off above)" : ""}.</p>${labels}
+      <p class="fine">Always write the labels. The app finds each row by its label. If other players share the card, put your name beside SCORE, or use a card of your own.</p></section>
+    <section class="group"><p class="step-tag">Step 3</p><h2>Mark each hole</h2>${keyRows}${shortLongNote}</section>
+    <section class="group"><h2>What it looks like</h2>${example}${afterHole}</section>
+    ${printed}${promise}`;
+}
+PAGES["course-card-guide"] = () => `<div class="page flow course-card-guide">${flowTop("Set up your scorecard", "", "Close")}
+  ${courseScorecardInstructions({ setup: true })}
   <button class="btn primary block big" data-act="paper-ready">Ready to play · I’ll use my paper card</button>
   <p class="fine center">Put your phone away. Come back after the round.</p>
   <details class="group"><summary>Already finished playing?</summary><button class="btn block" data-act="course-card-photo">Upload my course scorecard</button><button class="btn block" data-act="go" data-to="new">Add an Attest card or enter scores myself</button></details></div>`;
 PAGES.print = () => {
   const course = S.printCourse !== "" ? data.courses[Number(S.printCourse)] : null;
   return `<div class="page">${backBtn("more", "More")}<header class="page-head"><h1>Print a pocket card</h1><p class="lead">Choose your course, then print. Use a pencil while you play—your phone stays in your bag.</p></header>
-    <a class="choice course-card-link" href="#/course-card-guide">${icon("pencil",26)}<span><b>No printed card on hand?</b><small>Use the course’s scorecard · see marking directions</small></span>${icon("chevron",20)}</a>
+    <a class="choice course-card-link" href="#/course-card-guide">${icon("pencil",26)}<span><b>No printed card on hand?</b><small>Set up the course’s scorecard · choose rows and labels</small></span>${icon("chevron",20)}</a>
     <section class="group">
       <div class="seg" role="group" aria-label="Card type">${[["basic", "Standard · recommended"], ["detailed", "Detailed"]].map(([v, l]) => `<button class="${S.printType === v ? "on" : ""}" data-act="print-type" data-v="${v}" aria-pressed="${S.printType === v}">${l}</button>`).join("")}</div>
       <p class="fine">${S.printType === "basic" ? "Recommended: write three numbers and circle two choices per hole. One clear, larger card per sheet." : "Also circle approach miss, contact and whether you missed a short putt. One card per sheet."}</p>
@@ -2485,7 +2517,7 @@ PAGES.print = () => {
     <div class="card-preview ${S.printZoom ? "enlarged" : ""}" aria-label="Preview of the printed card"><style>${cardCSS}</style><div class="card-scale">${sheetHTML({ course, detailed: S.printType === "detailed" })}</div></div>
     <section class="group card-instructions"><h2>How to use your card</h2><ol><li><b>Cut</b> along the outside border.</li><li><b>Fold</b> on the middle dashed line with printing facing out.</li><li><b>Write</b> score, putts and penalties. <b>Circle</b> the tee-shot result and first-putt distance.</li><li><b>Flip</b> the card for holes 10–18.</li></ol></section>
     ${note("In the print dialog choose US Letter, landscape, and 100% scale (turn off \u201Cfit to page\u201D). Flat card: 10.4 in wide, folding to 5.2 in.")}
-    <section class="group prose"><h2>No printer needed</h2><p>The course’s own scorecard works too.</p><a class="btn block" href="#/course-card-guide">Show me how to mark a course scorecard</a></section></div>`;
+    <section class="group prose"><h2>No printer needed</h2><p>The course’s own scorecard works too.</p><a class="btn block" href="#/course-card-guide">Set up a course scorecard</a></section></div>`;
 };
 AFTER.print = () => {
   const box = document.querySelector(".card-preview"), inner = box?.querySelector(".card-scale");
@@ -2560,7 +2592,7 @@ PAGES.new = () => {
     <p class="lead">Which scorecard did you use?</p>
     <button class="choice" data-act="start-scan">${icon("print",28)}<span><b>Attest printed card</b><small>The pocket card with printed choices to circle</small></span></button>
     <button class="choice" data-act="course-card-photo">${icon("camera",28)}<span><b>Course’s own scorecard</b><small>The card supplied by the golf course, marked with the same stats.</small></span></button>
-    <a class="course-help-link" href="#/course-card-guide">How should I mark the course’s scorecard?</a>
+    <a class="course-help-link" href="#/course-card-guide">Set up and label the course’s scorecard</a>
     <button class="choice" data-act="start-manual">${icon("pencil", 28)}<span><b>Enter scores myself</b><small>Works offline. Takes about two minutes.</small></span></button>
   </div>`;
 };
@@ -2664,7 +2696,7 @@ PAGES.scan = () => {
   const course = kind === "course";
   return `<div class="page flow">${flowTop(course ? "Photograph course card" : "Photograph your card", course ? "course" : "new", "Back")}
     ${course ? "" : `<section class="group"><h2>What kind of scorecard is this?</h2><div class="seg three scan-card-types" role="group" aria-label="Scorecard type">${[["basic", "Attest card"], ["detailed", "Detailed card"], ["course-score", "Course’s own scorecard"]].map(([v, l]) => `<button class="${kind === v ? "on" : ""}" data-act="scan-kind" data-v="${v}" aria-pressed="${kind === v}">${l}</button>`).join("")}</div>
-      ${kind === "course-score" ? `<p>Upload the card you marked on paper: scores, putts, tee shots, penalties and first-putt distance. Missing details stay empty.</p><details class="course-guide-inline"><summary>Show the marking key and example</summary>${courseScorecardInstructions()}</details>` : ""}</section>`}
+      ${kind === "course-score" ? `<p>Upload the card you marked on paper: scores, putts, tee shots, penalties, first-putt distance and missed-green approaches. Missing details stay empty.</p><details class="course-guide-inline"><summary>Show my labels, marking key and example</summary>${courseScorecardInstructions()}</details>` : ""}</section>`}
     ${course ? `<section class="group"><label class="field"><span>Which tees did you play?</span><input data-bind="scan-tee" value="${esc2(S.scanTee || "")}" placeholder="e.g. White"></label><p class="fine">The AI reads printed par, yards for that tee row, and stroke index. You\u2019ll check them next.</p></section>` : ""}
     <section class="group"><h2>${S.backPhotoUrl ? "Photo 1: holes 1–9" : "Photo"}</h2>
       <p class="fine">Lay the card flat and unfolded in good light. Fill the frame, avoid shadows, hold the phone level.</p>
@@ -2691,7 +2723,7 @@ var SCAN_FIELDS = {
   detailed: [["score", "Score", "num"], ["putts", "Putts", "num"], ["fairway", "Fwy", ["", "H", "L", "R", "S", "LG", "NA"]], ["penalties", "Pen", "num"], ["puttZone", "1st", ["", "A", "B", "C", "D", "E"]], ["approach", "Appr", ["", "S", "LG", "L", "R"]], ["strike", "Contact", ["", "Solid", "Fat", "Thin"]], ["shortMiss", "Short", ["", "true", "false"]]],
   course: [["par", "Par", "num"], ["yardage", "Yards", "num"], ["handicap", "Index", "num"]]
 };
-SCAN_FIELDS["course-score"] = SCAN_FIELDS.basic;
+SCAN_FIELDS["course-score"] = [...SCAN_FIELDS.basic, ["approach", "Appr", ["", "S", "LG", "L", "R"]]];
 var OPT_LABEL = { A: "Under 3 ft", B: "3–6 ft", C: "6–15 ft", D: "15–30 ft", E: "30+ ft", H: "Hit fairway", L: "\u2190 L", R: "R \u2192", NA: "\u2014", S: "Short", LG: "Long", true: "Yes", false: "No", Solid: "Solid", Fat: "Fat", Thin: "Thin" };
 var STATUS_TEXT = { uncertain: "unsure", unclear: "unreadable", conflict: "doesn\u2019t add up", invalid: "not valid", missing: "not returned" };
 PAGES["scan-review"] = () => {
