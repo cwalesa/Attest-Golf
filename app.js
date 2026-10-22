@@ -2077,7 +2077,7 @@ function splitBar(parts) {
 }
 
 // js/app.js
-var VERSION = "2.4.2";
+var VERSION = "2.4.3";
 var params2 = new URLSearchParams(location.search);
 var DEMO = params2.get("demo") === "1";
 var data;
@@ -2680,7 +2680,7 @@ PAGES.scan = () => {
     <div class="flow-bar">
       <button class="btn primary block" data-act="read-card" ${!S.prepared || S.scanBusy ? "disabled" : ""}>${S.scanBusy ? "Reading your card…" : "Read my card"}</button>
       ${course ? "" : '<button class="btn block" data-act="photo-manual">Enter scores myself</button>'}
-      <p class="fine center">Photos are sent to the AI service only when you tap Read my card.</p>
+      <p class="fine center">Photos are sent to the configured AI service only when you tap Read my card. If this site uses Gemini’s free tier, Google may use submitted content to improve its products. Avoid including other players’ personal details.</p>
     </div></div>`;
 };
 var SCAN_FIELDS = {
